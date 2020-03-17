@@ -1,0 +1,841 @@
+import { GenerateAllUnitConverters } from './converters/all-converters';
+import { meter } from './shortcuts/length';
+import { INumericUnit, TNumericUnitOrValue } from './numeric/interfaces';
+import { IsNumericUnit, NumericUnit } from './numeric/implementation';
+import { IsUnit } from './implementation';
+import { IsObject } from '../../misc/helpers/is/is-object';
+import { mat3, vec2 } from 'gl-matrix';
+
+// import { ReadonlySet } from '../../misc/readonly-set/implementation';
+
+
+/*----*/
+
+/*----------------*/
+
+
+// export function NormalizeLengthUnit(value: TNumericUnitOrValue): INumericUnit {
+//   return IsNumericUnit(value)
+//     ? (
+//       (value.unit === 'meter')
+//         ? value
+//         : new NumericUnit(value.toOptions<number>('meter'))
+//     )
+//     : (
+//       IsUnit(value)
+//         ? new NumericUnit(
+//         (value.unit === 'meter')
+//           ? value
+//           : value.toOptions<number>('meter')
+//         )
+//         : new NumericUnit({
+//           value: value,
+//           unit: 'meter'
+//         })
+//     );
+// }
+//
+// export function NormalizeLengthUnitToMeter(value: TNumericUnitOrValue): number {
+//   return IsUnit(value)
+//     ? (
+//       (value.unit === 'meter')
+//         ? value.value
+//         : value.toOptions<number>('meter').value
+//     )
+//     : value;
+// }
+//
+// export interface IPCBItemOptions {
+//   x: TNumericUnitOrValue;
+//   y: TNumericUnitOrValue;
+// }
+//
+// export interface IPCBItemRenderOptions {
+//   layer: number;
+//   layerColor: string;
+// }
+//
+// export abstract class PCBItem {
+//   public readonly x: INumericUnit; // meter
+//   public readonly y: INumericUnit; // meter
+//
+//   protected constructor(options: IPCBItemOptions) {
+//     this.x = NormalizeLengthUnit(options.x);
+//     this.y = NormalizeLengthUnit(options.y);
+//   }
+//
+//   // abstract render(): void;
+// }
+//
+// // export abstract class PCBItem {
+// //   public readonly x: number; // meter
+// //   public readonly y: number; // meter
+// //
+// //   protected constructor(options: IPCBItemOptions) {
+// //     this.x = NormalizeLengthUnitToMeter(options.x);
+// //     this.y = NormalizeLengthUnitToMeter(options.y);
+// //   }
+// // }
+//
+// export interface IPCBCopperOptions extends IPCBItemOptions {
+//   layer: number;
+// }
+//
+// export class PCBCopper extends PCBItem {
+//
+//   public readonly layer: number;
+//
+//   constructor(options: IPCBCopperOptions) {
+//     super(options);
+//     this.layer = options.layer;
+//   }
+// }
+//
+//
+//
+// export class PCBHole extends PCBItem {
+//
+//   public readonly layer: number;
+//
+//   constructor(options: IPCBCopperOptions) {
+//     super(options);
+//     this.layer = options.layer;
+//   }
+// }
+//
+
+/*----------------*/
+
+/**
+ * TODO add support for complex shapes:
+ *  - many areas / perimeters (sub-shapes)
+ *  - possibility to add a transform for each sub shape
+ *  - possibility to mark shape as additive or subtractive
+ */
+export interface IShape2DSegmentOptions {
+}
+
+export abstract class Shape2DSegment {
+  protected constructor(options: IShape2DSegmentOptions) {
+  }
+
+  abstract appendToPath2D(origin: vec2, path2D: Path2D): vec2;
+}
+
+export interface ILineShape2DSegmentOptions extends IShape2DSegmentOptions {
+  endPoint: vec2;
+}
+
+export class Line extends Shape2DSegment implements ILineShape2DSegmentOptions {
+  public readonly endPoint: vec2;
+
+  constructor(options: ILineShape2DSegmentOptions) {
+    super(options);
+    this.endPoint = options.endPoint;
+  }
+
+  appendToPath2D(origin: vec2, path2D: Path2D): vec2 {
+    const endPoint: vec2 = vec2.add(vec2.create(), origin, this.endPoint);
+    path2D.lineTo(endPoint[0], endPoint[1]);
+    return endPoint;
+  }
+}
+
+
+// export interface ILineToShape2DSegmentOptions extends IShape2DSegmentOptions {
+//   endPoint: vec2;
+// }
+//
+// export class LineTo extends Line implements ILineToShape2DSegmentOptions {
+//   public readonly endPoint: vec2;
+//
+//   constructor(x: number, y: number);
+//   constructor(endPoint: vec2);
+//   constructor(options: ILineToShape2DSegmentOptions);
+//   constructor(...args: any[]) {
+//     let options: ILineToShape2DSegmentOptions;
+//     if (
+//       (args.length === 1)
+//       && IsObject(args[0])
+//     ) {
+//       if ('endPoint' in args[0]) {
+//         options = args[0] as ILineToShape2DSegmentOptions;
+//       } else {
+//         options = {
+//           endPoint: args[0] as vec2,
+//         };
+//       }
+//     } else if (
+//       (args.length === 2)
+//       && (typeof args[0] === 'number')
+//       &&  (typeof args[1] === 'number')
+//     ) {
+//       options = {
+//         endPoint: new vec2({
+//           x: args[0] as number,
+//           y: args[1] as number,
+//         })
+//       };
+//     } else {
+//       throw new TypeError(`Expected [ILineToShape2DSegmentOptions], [vec2], [number, number] as LineTo constructor's arguments`);
+//     }
+//
+//     super(options);
+//     this.endPoint = options.endPoint;
+//   }
+//
+//   appendToPath2D(origin: vec2, path2D: Path2D): vec2 {
+//     path2D.lineTo(this.endPoint[0], this.endPoint.y);
+//     return this.endPoint;
+//   }
+// }
+//
+
+export interface IArcShape2DSegmentOptions extends IShape2DSegmentOptions {
+  center: vec2;
+  angle: number;
+}
+
+export class Arc extends Shape2DSegment implements IArcShape2DSegmentOptions {
+  public readonly center: vec2;
+  public readonly angle: number;
+
+  constructor(options: IArcShape2DSegmentOptions) {
+    super(options);
+    this.center = options.center;
+    this.angle = options.angle;
+  }
+
+  appendToPath2D(origin: vec2, path2D: Path2D): vec2 {
+    const radius: number = vec2.length(this.center);
+    const startAngle: number = Math.atan2(-this.center[1], -this.center[0]);
+    const endAngle: number = startAngle + this.angle;
+
+    // console.log('startAngle', startAngle);
+
+    path2D.arc(
+      origin[0] + this.center[0],
+      origin[1] + this.center[1],
+      radius,
+      startAngle,
+      endAngle,
+      false
+    );
+
+    return vec2.fromValues(
+      (Math.cos(endAngle) * radius) + origin[0] + this.center[0],
+      (Math.sin(endAngle) * radius) + origin[1] + this.center[1],
+    );
+  }
+}
+
+
+export interface ICircleShape2DSegmentOptions extends Omit<IArcShape2DSegmentOptions, 'angle'> {
+}
+
+export class Circle extends Arc implements ICircleShape2DSegmentOptions {
+  constructor(options: ICircleShape2DSegmentOptions) {
+    super({
+      ...options,
+      angle: Math.PI  * 2
+    });
+  }
+}
+
+
+export interface IRectangleShape2DSegmentOptions extends IShape2DSegmentOptions {
+  size: vec2;
+}
+
+export class Rectangle extends Shape2DSegment implements IRectangleShape2DSegmentOptions {
+  public readonly size: vec2;
+
+  constructor(options: IRectangleShape2DSegmentOptions) {
+    super(options);
+    this.size = options.size;
+  }
+
+  get width(): number {
+    return this.size[0];
+  }
+
+  get height(): number {
+    return this.size[1];
+  }
+
+  appendToPath2D(origin: vec2, path2D: Path2D): vec2 {
+    path2D.rect(origin[0], origin[1], this.size[0], this.size[1]);
+    return origin;
+  }
+}
+
+
+export interface ISquareShape2DSegmentOptions extends IShape2DSegmentOptions {
+  side: number;
+}
+
+export class Square extends Rectangle implements ISquareShape2DSegmentOptions {
+  constructor(options: ISquareShape2DSegmentOptions) {
+    super({
+      ...options,
+      size: vec2.fromValues(
+        options.side,
+        options.side,
+      ),
+    });
+  }
+
+  get side(): number {
+    return this.size[0];
+  }
+}
+
+/*--*/
+
+export interface IShape2DOptions {
+  origin: vec2;
+  segments: Shape2DSegment[];
+}
+
+export abstract class Shape2D implements IShape2DOptions {
+  public readonly origin: vec2;
+  public readonly segments: Shape2DSegment[];
+
+  protected constructor(options: IShape2DOptions) {
+    this.origin = options.origin;
+    this.segments = options.segments;
+  }
+
+  toPath2D(): Path2D {
+    const path2D: Path2D = new Path2D();
+    let origin: vec2 = this.origin;
+    path2D.moveTo(origin[0], origin[1]);
+    for (let i = 0, l = this.segments.length; i < l; i++) {
+      origin = this.segments[i].appendToPath2D(origin, path2D);
+    }
+    return path2D;
+  }
+
+  abstract draw(context: CanvasRenderingContext2D): void;
+}
+
+
+export interface IAreaShape2DOptions extends IShape2DOptions {
+}
+
+export class Area extends Shape2D implements IAreaShape2DOptions {
+  constructor(options: IShape2DOptions) {
+    super(options);
+  }
+
+  draw(context: CanvasRenderingContext2D): void {
+    context.fill(this.toPath2D());
+  }
+}
+
+
+export interface IPerimeterShape2DOptions extends IShape2DOptions {
+  thickness: number;
+}
+
+export class Perimeter extends Shape2D implements IPerimeterShape2DOptions {
+  public readonly thickness: number;
+
+  constructor(options: IPerimeterShape2DOptions) {
+    super(options);
+    this.thickness = options.thickness;
+  }
+
+  draw(context: CanvasRenderingContext2D): void {
+    context.lineWidth = this.thickness;
+    context.stroke(this.toPath2D());
+  }
+}
+
+
+export interface ITextShape2DOptions extends IShape2DOptions {
+  text: string;
+}
+
+export class TextShape extends Shape2D implements ITextShape2DOptions {
+  public readonly text: string;
+
+  constructor(options: ITextShape2DOptions) {
+    super(options);
+    this.text = options.text;
+  }
+
+  draw(context: CanvasRenderingContext2D): void {
+    context.fillText(this.text, this.origin[0], this.origin[1]);
+  }
+}
+
+
+
+function CreateCanvas(width: number, height: number): CanvasRenderingContext2D {
+  const canvas: HTMLCanvasElement = document.createElement('canvas');
+
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = `${ width }px`;
+  canvas.style.height = `${ height }px`;
+  canvas.style.border = `2px solid black`;
+  canvas.style.imageRendering = 'pixelated';
+
+  document.body.appendChild(canvas);
+
+  return canvas.getContext('2d') as CanvasRenderingContext2D;
+}
+
+
+export function testShapes() {
+  const ctx = CreateCanvas(512, 512);
+  ctx.lineJoin = 'bevel';
+
+  const origin: vec2 = vec2.fromValues(
+    ctx.canvas.width / 2,
+    ctx.canvas.height / 2,
+  );
+
+  const center = new Path2D();
+  center.arc(origin[0], origin[1], 5,  0, Math.PI * 2);
+  ctx.fillStyle = 'red';
+  ctx.fill(center);
+  ctx.fillStyle = 'black';
+
+  let shapes: Shape2D[] = [
+    new Perimeter({
+      origin,
+      thickness: 2,
+      segments: [
+        new Line({
+          endPoint: vec2.fromValues(50,50)
+        })
+      ]
+    }),
+
+    new Perimeter({
+      origin,
+      thickness: 2,
+      segments: [
+        new Rectangle({
+          size: vec2.fromValues(50,50)
+        })
+      ]
+    }),
+
+    new Perimeter({
+      origin,
+      thickness: 2,
+      segments: [
+        new Arc({
+          center: vec2.fromValues(50, 0),
+          angle: Math.PI / 2,
+        }),
+        new Arc({
+          center: vec2.fromValues(0, 50),
+          angle: Math.PI / 2,
+        }),
+        new Line({
+          endPoint: vec2.fromValues(-50, 0)
+        })
+      ]
+    }),
+
+    new Perimeter({
+      origin,
+      thickness: 2,
+      segments: [
+        new Circle({
+          center: vec2.fromValues(50, 50),
+        }),
+      ]
+    })
+
+  ];
+
+  shapes[3].draw(ctx);
+}
+
+
+/*----------------*/
+
+export function Mat3ToCanvasRenderingContext2DTransform(
+  transform: mat3,
+  context: CanvasRenderingContext2D,
+): void {
+  context.transform(
+    transform[0],
+    transform[1],
+    transform[3],
+    transform[4],
+    transform[6],
+    transform[7],
+  );
+}
+
+export function Mat3ToTempCanvasRenderingContext2DTransform(
+  this: any,
+  transform: mat3,
+  context: CanvasRenderingContext2D,
+  callback: () => void,
+  thisArg: any = this,
+): void {
+  context.save();
+  Mat3ToCanvasRenderingContext2DTransform(transform, context);
+  callback.call(thisArg);
+  context.restore();
+}
+
+/**
+ * TODO introduce PCBMaterial for copper, holes, silkscreen, solder mask, etc...
+ */
+export interface IPCBMaterialOptions {
+  shape: Shape2D;
+}
+
+export abstract class PCBMaterial implements IPCBMaterialOptions {
+  readonly shape: Shape2D;
+
+  protected constructor(options: IPCBMaterialOptions) {
+    this.shape = options.shape;
+  }
+}
+
+
+
+export interface IPCBCopperOptions extends IPCBMaterialOptions {
+  layer: number;
+}
+
+export class PCBCopper extends PCBMaterial implements IPCBCopperOptions {
+  public readonly layer: number;
+
+  constructor(options: IPCBCopperOptions) {
+    super(options);
+    this.layer = options.layer;
+  }
+
+  getAbsoluteLayer(layers: number): number {
+    const layer: number = (this.layer < 0)
+      ? (layers - this.layer)
+      : this.layer;
+
+    if ((0 <= layer) && (layer < layers)) {
+      return layer;
+    } else {
+      throw new RangeError(`Layer is outside of the board layers range [0, ${ layers }], found ${ this.layer } resolved as ${ layer }`);
+    }
+  }
+}
+
+
+export interface IPCBHoleOptions extends IPCBMaterialOptions {
+}
+
+export class PCBHole extends PCBMaterial implements IPCBHoleOptions {
+  constructor(options: IPCBHoleOptions) {
+    super(options);
+  }
+}
+
+/*---*/
+
+
+export interface IPCBPartGroupOptions extends IPCBMaterialOptions {
+  parts: PCBPart[];
+}
+
+export abstract class PCBPartGroup extends PCBPart implements IPCBPartGroupOptions {
+  readonly parts: PCBPart[];
+
+  protected constructor(options: IPCBPartGroupOptions) {
+    super(options);
+    this.parts = options.parts;
+  }
+}
+
+
+
+export interface IPCBBoardOptions extends IPCBPartWithShapeOptions, IPCBPartGroupOptions {
+  layers: number;
+  shape: Perimeter;
+}
+
+export interface IPCBBoardDrawOptions {
+  layerColors: string[];
+  boardColor: string;
+}
+
+export class PCBBoard extends PCBPartGroup implements IPCBBoardOptions {
+  readonly layers: number;
+  readonly shape: Perimeter;
+
+  constructor(options: IPCBBoardOptions) {
+    super(options);
+    this.layers = options.layers;
+    this.shape = options.shape;
+  }
+
+  getSimpleParts(parts: PCBPart[] = this.parts, simpleParts: PCBSimplePart[] = []): PCBSimplePart[] {
+    for (let i = 0, l = parts.length; i < l; i++) {
+      const part: PCBPart = parts[i];
+      if (part instanceof PCBPartGroup) {
+        this.getSimpleParts(part.parts, simpleParts);
+      } else {
+        simpleParts.push(part as PCBSimplePart);
+      }
+    }
+    return simpleParts;
+  }
+
+  getPCBParts<T extends PCBPart>(type: new(...args: any) => T, parts: PCBPart[] = this.getSimpleParts()): T[] {
+    return parts.filter<T>((part: PCBPart): part is T => {
+      return (part instanceof type);
+    });
+  }
+
+  getHoles(): PCBHole[] {
+    return this.getPCBParts<PCBHole>(PCBHole);
+  }
+
+  getCopperParts(): PCBCopper[] {
+    return this.getPCBParts<PCBCopper>(PCBCopper);
+  }
+
+  getLayers(): PCBCopper[][] {
+    const layers: PCBCopper[][] = Array.from({ length: this.layers }, () => []);
+    const copperParts: PCBCopper[] = this.getCopperParts();
+    console.log(copperParts);
+    for (let i = 0, l = copperParts.length; i < l; i++) {
+      const copperPart: PCBCopper = copperParts[i];
+      layers[copperPart.getAbsoluteLayer(this.layers)].push(copperPart);
+    }
+    return layers;
+  }
+
+  draw(context: CanvasRenderingContext2D, options: IPCBBoardDrawOptions): void {
+    console.log(this.getSimpleParts());
+    return this.applyTransform(context, () => {
+      this.drawLayers(context, options);
+      this.drawBoard(context, options);
+    });
+  }
+
+  protected drawBoard(context: CanvasRenderingContext2D, options: IPCBBoardDrawOptions): void {
+    context.strokeStyle = options.boardColor;
+    this.shape.draw(context);
+  }
+
+  protected drawLayers(context: CanvasRenderingContext2D, options: IPCBBoardDrawOptions): void {
+    const layers: PCBCopper[][] = this.getLayers();
+    for (let layerIndex = 0, layersLength = layers.length; layerIndex < layersLength; layerIndex++) {
+      const layer: PCBCopper[] = layers[layerIndex];
+      context.fillStyle = options.layerColors[layerIndex];
+      context.strokeStyle = options.layerColors[layerIndex];
+
+      for (let partIndex = 0, partsLength = layer.length; partIndex < partsLength; partIndex++) {
+        const part: PCBCopper = layer[partIndex];
+        part.applyTransform(context, () => {
+          part.shape.draw(context);
+        });
+      }
+    }
+  }
+}
+
+/*---*/
+
+export interface IPCBPadOptions extends Omit<IPCBCopperOptions, 'shape'> {
+  size: vec2;
+}
+
+export class PCBPad extends PCBCopper implements IPCBPadOptions {
+  public readonly layer: number;
+
+  constructor(options: IPCBPadOptions) {
+    super({
+      ...options,
+      shape: new Area({
+        origin: vec2.create(),
+        segments: [
+          new Rectangle({
+            size: options.size,
+          })
+        ]
+      })
+    });
+    this.layer = options.layer;
+  }
+
+  get size(): vec2 {
+    return (this.shape.segments[0] as Rectangle).size;
+  }
+
+  getAbsoluteLayer(layers: number): number {
+    const layer: number = (this.layer < 0)
+      ? (layers - this.layer)
+      : this.layer;
+
+    if ((0 <= layer) && (layer < layers)) {
+      return layer;
+    } else {
+      throw new RangeError(`Layer is outside of the board layers range [0, ${ layers }], found ${ this.layer } resolved as ${ layer }`);
+    }
+  }
+}
+
+
+export interface IPCBThroughHoleOptions extends Omit<IPCBPartGroupOptions, 'parts'> {
+  radius: number;
+  border: number;
+}
+
+export class PCBThroughHole extends PCBPartGroup implements IPCBThroughHoleOptions {
+  public readonly radius: number;
+  public readonly border: number;
+
+  constructor(options: IPCBThroughHoleOptions) {
+    super({
+      ...options,
+      parts: [
+        new PCBCopper({
+          transform: mat3.create(),
+          layer: 0,
+          shape: new Area({
+            origin: vec2.fromValues(-options.radius, 0),
+            segments: [
+              new Circle({
+                center: vec2.fromValues(options.radius, 0),
+              })
+            ]
+          })
+        })
+      ]
+    });
+    this.radius = options.radius;
+    this.border = options.border;
+  }
+}
+
+
+/*---*/
+
+export function testPCBBoard() {
+  const ctx = CreateCanvas(512, 512);
+  ctx.lineJoin = 'bevel';
+
+  function DrawBackground(context: CanvasRenderingContext2D) {
+    context.fillStyle = 'black';
+    context.beginPath();
+    context.rect(0, 0, context.canvas.width, context.canvas.height);
+    context.fill();
+  }
+
+  const boardDrawOptions: IPCBBoardDrawOptions = {
+    boardColor: 'yellow',
+    layerColors: [
+      'red',
+      'blue'
+    ],
+  };
+
+  const board = new PCBBoard({
+    layers: 2,
+    transform: mat3.fromTranslation(mat3.create(), vec2.fromValues(10, 10)),
+    shape: new Perimeter({
+      origin: vec2.create(),
+      thickness: 2,
+      segments: [
+        new Rectangle({
+          size: vec2.fromValues(200, 200)
+        })
+      ],
+    }),
+    parts: [
+      new PCBPad({
+        transform: mat3.create(),
+        layer: 0,
+        size: vec2.fromValues(50, 50)
+      }),
+
+      new PCBThroughHole({
+        transform: mat3.fromTranslation(mat3.create(), vec2.fromValues(100, 100)),
+        border: 2,
+        radius: 20,
+      })
+    ],
+
+  });
+
+  DrawBackground(ctx);
+  board.draw(ctx, boardDrawOptions);
+}
+
+
+/*----------*/
+
+export function testPCB() {
+  // testShapes();
+  testPCBBoard();
+}
+
+/*----------------*/
+
+
+
+export function testUnit() {
+  GenerateAllUnitConverters();
+
+  // console.log(GetTypeConverters('m', 'in'));
+  // console.log(GetTypeConverterOrThrow('meter', 'metre')(0.3));
+  // console.log(GetTypeConverterOrThrow('meter', 'm')(0.3));
+  // console.log(GetTypeConverterOrThrow('m', 'cm')(0.3));
+  // console.log(GetTypeConverterOrThrow('mm', 'cm')(15));
+  //
+  // console.log(GetTypeConverterOrThrow('in', 'cm')(1));
+  // console.log(GetTypeConverterOrThrow('cm', 'in')(2.54 * 4));
+  // console.log(GetTypeConverterOrThrow('th', 'mm')(1));
+  // console.log(GetTypeConverterOrThrow('minute', 'second')(1));
+  //
+  // console.log(GetTypeConverterOrThrow('minute', 'meter')(1));
+
+  // console.log(GetTypeConverterOrThrow('degree', 'radian')(180));
+  // console.log(GetTypeConverterOrThrow('rad', 'deg')(Math.PI / 2));
+
+  // console.log(GetTypeConverterOrThrow('celcius', 'kelvin')(0));
+  // console.log(GetTypeConverterOrThrow('celcius', '°F')(0));
+
+  // console.log(meter(1).add(mm(1000)).sub(cm(10)).to('cm').toString());
+  // console.log(NumericUnit.mean(fahrenheit(32), kelvin(273.15)).to('°C').toString());
+
+  testPCB();
+}
+
+
+/**
+ * LINKS:
+ *  http://support.seeedstudio.com/knowledgebase/articles/493833-what-is-gerber-file
+ *
+Extension                       Layer
+ pcbname.GTL                 Top Copper
+ pcbname.GTS                 Top Soldermask
+ pcbname.GTO                 Top Silkscreen
+
+ pcbname.GBL                 Bottom copper
+ pcbname.GBS                 Bottom Soldermask:
+ pcbname.GBO                 Bottom Silkscreen:
+ pcbname.TXT                  Drills
+ pcbname.GML/GKO        *Board Outline:
+
+ 4 layer board also need
+ pcbname.GL2                   Inner Layer2
+ pcbname.GL3                   Inner Layer3
+
+
+ RS-274X format
+
+ https://www.ucamco.com/files/downloads/file/81/The_Gerber_File_Format_specification.pdf?dd1347f8978ee2fb4532ef5613d36e70
+
+ */
+

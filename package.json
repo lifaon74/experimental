@@ -47,7 +47,6 @@
     "copy_sources": "mkdirp dist && shx cp -r ./src/ ./dist/src",
     "generate_packages": "node tools/make-packages.js",
     "publish_package": "yarn publish ./dist/package --access public",
-
     "dev_browser": "npm-run-all clean_dev_browser watch_dev_browser",
     "watch_dev_browser": "npm-run-all -p tsc_watch_dev_browser serve_dev_browser",
     "tsc_watch_dev_browser": "tsc-watch -p ./tsconfig/tsconfig.dev.browser.json --onSuccess \"npm run build_dev_browser\"",
@@ -57,14 +56,12 @@
     "build_scss_dev_browser": "node tools/build-scss.js browser",
     "serve_dev_browser": " browser-sync start --config bs-config.js",
     "clean_dev_browser": "shx rm -rf ./dist/browser",
-
     "dev_nodejs": "npm-run-all clean_dev_nodejs watch_dev_nodejs",
     "watch_dev_nodejs": "npm-run-all -p tcs_watch_dev_nodejs nodemon_dev_bodejs",
     "tcs_watch_dev_nodejs": "tsc-watch -p ./tsconfig/tsconfig.dev.nodejs.json",
     "clean_dev_nodejs": "npm run clean_dist_cjs",
     "prenodemon_dev_bodejs": "wait-on ./dist/cjs/app.js",
     "nodemon_dev_bodejs": "nodemon --delay 1500ms \"./dist/cjs/app.js\"",
-
     "toc": "markdown-toc README.md"
   },
   "repository": {
@@ -99,5 +96,7 @@
     "typescript-tuple": "^2.2.1",
     "wait-on": "^4.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "gl-matrix": "^3.2.1"
+  }
 }

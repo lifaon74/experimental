@@ -1,0 +1,24 @@
+G04*
+G04 Format:               Gerber RS-274X*
+G04 Export Settings:      (custom)*
+G04 Layer:                BottomCopper*
+G04 This File Name:       sample01.gbl*
+G04 Source File Name:     sample01.rrb*
+G04 Unique ID:            0be43507-8dca-41d4-bf9a-a9fdf3de71e8*
+G04 Generated Date:       Tuesday, 17 March 2020 12:40:19*
+G04*
+G04 Created Using:        Robot Room Copper Connection v3.0.5875*
+G04 Software Contact:     http://www.robotroom.com/CopperConnection/Support.aspx*
+G04 License Number:       2049*
+G04*
+G04 Zero Suppression:     Leading*
+G04 Number Precision:     3.3*
+G04*
+%FSLAX33Y33*%
+%MOMM*%
+%LNBottomCopper*%
+%ADD10C,2.*%
+%ADD11R,.178X.178*%
+D10*
+G01X5000Y5000D03*
+M02*
