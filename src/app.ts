@@ -1,7 +1,8 @@
 import { testUnit } from './experimental/units/unit';
+import { debugPCB } from './experimental/pcb/debug';
 
 export async function run() {
-  await testUnit();
+  await debugPCB();
 }
 
 export function start(mainCallBack: () => (Promise<any> | any)) {

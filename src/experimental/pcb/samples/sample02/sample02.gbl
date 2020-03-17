@@ -1,11 +1,11 @@
 G04*
 G04 Format:               Gerber RS-274X*
 G04 Export Settings:      (custom)*
-G04 Layer:                TopSilkscreen*
-G04 This File Name:       sample01.gto*
-G04 Source File Name:     sample01.rrb*
-G04 Unique ID:            0be43507-8dca-41d4-bf9a-a9fdf3de71e8*
-G04 Generated Date:       Tuesday, 17 March 2020 12:40:19*
+G04 Layer:                BottomCopper*
+G04 This File Name:       sample02.gbl*
+G04 Source File Name:     sample02.rrb*
+G04 Unique ID:            3a51e2ed-8059-4bd5-a319-a5a218504b43*
+G04 Generated Date:       Tuesday, 17 March 2020 17:54:02*
 G04*
 G04 Created Using:        Robot Room Copper Connection v3.0.5875*
 G04 Software Contact:     http://www.robotroom.com/CopperConnection/Support.aspx*
@@ -16,13 +16,6 @@ G04 Number Precision:     3.3*
 G04*
 %FSLAX33Y33*%
 %MOMM*%
-%LNTopSilkscreen*%
+%LNBottomCopper*%
 %ADD10R,.178X.178*%
-D10*
-G01*
-X0Y10000D02*
-X10000D01*
-Y0D01*
-X0D01*
-Y10000D01*
 M02*
