@@ -42,6 +42,11 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
+"@lifaon/path@^1.1.2":
+  version "1.1.2"
+  resolved "https://registry.yarnpkg.com/@lifaon/path/-/path-1.1.2.tgz#abf953566066d9d8b4d4ba5e847408211f2b200e"
+  integrity sha512-uFECM33D3yExTzgesfNhJcgQODEkrKvhqE8uKYY/jizeN1gRNSDQwPQnY2avysE2IacpYe39mA1/Hr5aEergww==
+
 "@types/estree@*":
   version "0.0.42"
   resolved "https://registry.yarnpkg.com/@types/estree/-/estree-0.0.42.tgz#8d0c1f480339efedb3e46070e22dd63e0430dd11"

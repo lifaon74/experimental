@@ -97,6 +97,7 @@
     "wait-on": "^4.0.0"
   },
   "dependencies": {
+    "@lifaon/path": "^1.1.2",
     "gl-matrix": "^3.2.1"
   }
 }

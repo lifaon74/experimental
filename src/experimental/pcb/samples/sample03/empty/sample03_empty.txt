@@ -1,0 +1,20 @@
+M48
+;
+; Format:               Excellon NC Drill Ascii
+; Export Settings:      (custom)
+; This File Name:       sample03_empty.txt
+; Source File Name:     sample03_empty.rrb
+; Unique ID:            bfc7778e-10fb-45d6-8761-1d69ea7a3e9a
+; Generated Date:       Thursday, 19 March 2020 12:13:30
+;
+; Created Using:        Robot Room Copper Connection v3.0.5875
+; Software Contact:     http://www.robotroom.com/CopperConnection/Support.aspx
+; License Number:       2049
+;
+; Zero Suppression:     Trailing
+; Number Precision:     2.4
+;
+FMAT,2
+INCH,LZ
+%
+M30

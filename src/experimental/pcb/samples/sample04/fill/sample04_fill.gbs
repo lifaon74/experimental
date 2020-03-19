@@ -1,0 +1,23 @@
+G04*
+G04 Format:               Gerber RS-274X*
+G04 Export Settings:      (custom)*
+G04 Layer:                BottomSolderMask*
+G04 This File Name:       sample04_fill.gbs*
+G04 Source File Name:     sample04_fill.rrb*
+G04 Unique ID:            090e6e49-1f4b-4e3c-9eb2-e137142229cf*
+G04 Generated Date:       Thursday, 19 March 2020 12:18:58*
+G04*
+G04 Created Using:        Robot Room Copper Connection v3.0.5875*
+G04 Software Contact:     http://www.robotroom.com/CopperConnection/Support.aspx*
+G04 License Number:       2049*
+G04*
+G04 Zero Suppression:     Leading*
+G04 Number Precision:     3.3*
+G04*
+G04 Polarity:             Negative. Dark is solderable. Clear space is coating.*
+G04*
+%FSLAX33Y33*%
+%MOMM*%
+%LNBottomSolderMask*%
+%ADD10R,.178X.178*%
+M02*
