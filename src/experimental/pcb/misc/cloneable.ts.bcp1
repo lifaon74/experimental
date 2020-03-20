@@ -1,0 +1,66 @@
+import { Constructor } from '../../../classes/class-helpers/types';
+
+export interface ICloneable<TOptions extends object> {
+  clone(override?: TOptions): this;
+}
+
+export interface ICloneableByOptions<TOptions extends object> {
+  cloneAsOptions(override?: TOptions): TOptions;
+}
+
+export interface ICloneableByConstructor<TInstance extends ICloneableByOptions<any>> {
+  new(options: Partial<TInstance>/*, ...args: any[]*/): TInstance;
+}
+
+// export function AutoCloneOptions<TInstance extends object>(instance: TInstance, properties: keyof TInstance = Object.keys(instance) as unknown as keyof TInstance): TInstance {
+//   return new (instance.constructor as TClass)(instance.cloneOptions({
+//
+//   }));
+// }
+
+// export function AutoClone<TInstance extends object>(instance: TInstance): TInstance {
+//   if (Array.isArray(instance)) {
+//
+//   }
+// }
+
+
+export function AutoClone<TClass extends ICloneableByConstructor<any>>(instance: InstanceType<TClass>, override?: Partial<InstanceType<TClass>>): InstanceType<TClass> {
+  return new (instance.constructor as TClass)(instance.cloneOptions(override));
+}
+
+export interface ISuperCloneable<TInstance extends object, TOptions extends Partial<TInstance> = Partial<TInstance>> extends ICloneable<TInstance>, ICloneableByOptions<TOptions> {
+}
+
+export function Cloneable<TBase extends Constructor>(baseClass: TBase) {
+  type TInstance = InstanceType<TBase>;
+  type TOptions = Partial<TInstance>;
+
+  return class extends baseClass implements ISuperCloneable<TInstance, TOptions> {
+    constructor(...args: any[]) {
+      super(...args);
+    }
+
+    cloneAsOptions(override?: TOptions): TOptions {
+      return {
+        ...this
+      };
+      // throw new Error(`Missing cloneOptions implementation`);
+    }
+
+    clone(override?: TOptions): this {
+      return new (this.constructor as any)(this.cloneAsOptions(override)) as this;
+    }
+  };
+}
+
+export function CloneProperty<TInstance extends object, TOptions extends object, TKey extends Extract<keyof TInstance, keyof TOptions>>(
+  instance: TInstance,
+  override: TOptions | undefined,
+  propertyKey: TKey,
+  clone: (value: TInstance[TKey]) => TOptions[TKey]
+): TOptions[TKey] | undefined {
+  return ((override === void 0) || (override[propertyKey] === void 0))
+    ? clone(instance[propertyKey])
+    : void 0;
+}

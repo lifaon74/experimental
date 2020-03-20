@@ -3,7 +3,8 @@ import { GetTypeConverterOrThrow } from './converters/register';
 import { ConstructClassWithPrivateMembers } from '../../misc/helpers/ClassWithPrivateMembers';
 import { IsObject } from '../../misc/helpers/is/is-object';
 
-/** CONSTRUCTOR **/
+/** PRIVATES **/
+
 export const UNIT_PRIVATE = Symbol('unit-private');
 
 export interface IUnitPrivate<T> {
@@ -14,6 +15,8 @@ export interface IUnitPrivate<T> {
 export interface IUnitInternal<T> extends IUnit<T> {
   [UNIT_PRIVATE]: IUnitPrivate<T>;
 }
+
+/** CONSTRUCTOR **/
 
 export function ConstructUnit<T>(
   instance: IUnit<T>,
