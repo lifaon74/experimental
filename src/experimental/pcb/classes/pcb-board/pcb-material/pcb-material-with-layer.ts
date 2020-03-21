@@ -15,23 +15,31 @@ export function NormalizePCBLayer(layer: TPCBLayer): number {
   }
 }
 
-export function GetAbsolutePCBLayer(layer: number, layers: number): number {
+export function GetAbsolutePCBLayer(layer: number, totalLayers: number): number {
   const absoluteLayer: number = (layer < 0)
-    ? (layers - layer)
+    ? (totalLayers + layer)
     : layer;
 
-  if ((0 <= absoluteLayer) && (absoluteLayer < layers)) {
+  if ((0 <= absoluteLayer) && (absoluteLayer < totalLayers)) {
     return absoluteLayer;
   } else {
-    throw new RangeError(`Layer is outside of the layers range [0, ${ layers }], found ${ layer } resolved as ${ absoluteLayer }`);
+    throw new RangeError(`Layer is outside of the layers range [0, ${ totalLayers }], found ${ layer } resolved as ${ absoluteLayer }`);
   }
 }
 
-export function VerifyPCBLayerIsExternal(layer: number): void {
-  if (
-    (layer !== 0)
-    && (layer !== -1)
-  ) {
+export function IsPCBLayerExternal(layer: number, totalLayers?: number): boolean {
+  return (
+    (layer === 0)
+    || (layer === -1)
+    || (
+      (totalLayers !== void 0)
+      && (layer === (totalLayers - 1))
+    )
+  )
+}
+
+export function VerifyPCBLayerIsExternal(layer: number, totalLayers?: number): void {
+  if (!IsPCBLayerExternal(layer, totalLayers)) {
     throw new Error(`PCB layer should be 'top' or 'bottom'`);
   }
 }

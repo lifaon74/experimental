@@ -15,7 +15,7 @@ export function HasBOMFactory<TBase extends Constructor>(baseClass: TBase) {
     public bom: BOM | undefined;
 
     constructor(...args: any[]) {
-      const [options]: [IHasBOMOptions] = args[0];
+      const options: IHasBOMOptions = args[0];
       super(...args);
       this.bom = options.bom;
     }

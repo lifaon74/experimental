@@ -16,6 +16,8 @@ import {
 import { PCBCopper } from './classes/pcb-board/pcb-material/built-in/copper/pcb-copper';
 import { PCBSilkscreen } from './classes/pcb-board/pcb-material/built-in/silkscreen/pcb-silkscreen';
 import { ExportBoardToGerberAndExcellon } from './exporters/gerber-and-excellon/export-board-to-gerber-and-excellon';
+import { PCBSolderMask } from './classes/pcb-board/pcb-material/built-in/solder-mask/pcb-solder-mask';
+import { PCBHole } from './classes/pcb-board/pcb-material/built-in/hole/pcb-hole';
 
 
 /**
@@ -55,22 +57,71 @@ const TMP = DIST.concat('tmp');
 
 export function pad(layer: TPCBLayer, width: number, height: number): PCBPart {
   VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
+
+  const area: AreaShape = new AreaShape({
+    path: ShapePath.rectangle(width, height),
+    sharpness: 0,
+  });
+
   return new PCBPart({
     materials: [
       new PCBCopper({
         layer,
         shapes: [
-          new AreaShape({
-            path: ShapePath.rectangle(width, height),
-            sharpness: 0,
-          })
+          area
+        ]
+      }),
+      new PCBSolderMask({
+        layer,
+        shapes: [
+          area.clone()
         ]
       })
     ]
   });
 }
 
-export function icSilkScreen(layer: TPCBLayer, width: number, height: number): PCBPart {
+export function circular_pad(layer: TPCBLayer, radius: number): PCBPart {
+  VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
+
+  const area: AreaShape = new AreaShape(AreaShape.circle(radius));
+
+  return new PCBPart({
+    materials: [
+      new PCBCopper({
+        layer,
+        shapes: [
+          area
+        ]
+      }),
+      new PCBSolderMask({
+        layer,
+        shapes: [
+          area.clone()
+        ]
+      })
+    ]
+  });
+}
+
+export function through_hole(innerRadius: number, border: number): PCBPart {
+  const outerRadius: number = innerRadius + border;
+
+  return new PCBPart({
+    materials: [
+      circular_pad('top', outerRadius),
+      circular_pad('bottom', outerRadius),
+      new PCBHole({
+        shapes: [
+          new AreaShape(AreaShape.circle(innerRadius))
+        ]
+      }),
+    ]
+  });
+}
+
+
+export function ic_silkscreen(layer: TPCBLayer, width: number, height: number): PCBPart {
   const thickness: number = 0.2;
   const markSpacing: number = 0.2;
   const markRadius: number = 0.3;
@@ -98,6 +149,7 @@ export function icSilkScreen(layer: TPCBLayer, width: number, height: number): P
   });
 }
 
+// TODO should take array of pin with descriptions ['VCC', GND, etc...]
 export function soic(layer: TPCBLayer, pinCount: number): IObject2DGroup<PCBPart> {
   VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
 
@@ -114,7 +166,7 @@ export function soic(layer: TPCBLayer, pinCount: number): IObject2DGroup<PCBPart
         return pad(layer, padWidth, padHeight)
           .translate([(index % 2) * padXDistance, Math.floor(index / 2) * padYDistance]);
       }),
-      icSilkScreen(layer, padSpacing - (silkScreenSpacing * 2), padYDistance * Math.ceil(pinCount / 2))
+      ic_silkscreen(layer, padSpacing - (silkScreenSpacing * 2), padYDistance * Math.ceil(pinCount / 2))
         .translate([padWidth + silkScreenSpacing, -(padYDistance / 4)]),
     ]
   });
@@ -203,10 +255,11 @@ export async function debugPCB3() {
   const precision = new GerberPrecision(3, 3);
 
   const board = new PCBBoard({
-    shape: ShapePath.rectangle(50, 50),
+    edges: ShapePath.rectangle(50, 50),
     layers: 2,
     children: [
       soic(0, 8),
+      through_hole(0.8, 0.4)
       // pad(0, 10, 10)
       //   .rotate(Math.PI / 4)
       //   .translate([5, 5]),

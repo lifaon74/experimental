@@ -98,6 +98,7 @@
   },
   "dependencies": {
     "@lifaon/path": "^1.1.2",
-    "gl-matrix": "^3.2.1"
+    "gl-matrix": "^3.2.1",
+    "jszip": "^3.2.2"
   }
 }

@@ -1,7 +1,8 @@
 import { PCBBoard } from '../../../../classes/pcb-board/pcb-board';
 import { GerberPrecision } from '../gerber-precision';
 import { GenerateGerber, GenerateGerberHeaders } from './functions';
-import { PCBCopper } from '../../../../classes/pcb-board/pcb-material/built-in/copper/pcb-copper';
+import { PCBMaterial } from '../../../../classes/pcb-board/pcb-material/pcb-material';
+import { PerimeterShape } from '../../../../classes/shape/build-in/perimeter/perimeter-shape';
 
 
 export interface IGerberExtensionAndGenerator {
@@ -12,11 +13,31 @@ export interface IGerberExtensionAndGenerator {
 export const GERBER_GENERATORS: IGerberExtensionAndGenerator[] = [
   {
     extension: 'gtl',
-    generator: GenerateGerberBoardTopLayer
+    generator: GenerateGerberBoardTopCopperLayer
   },
   {
     extension: 'gbl',
-    generator: GenerateGerberBoardBottomLayer
+    generator: GenerateGerberBoardBottomCopperLayer
+  },
+  {
+    extension: 'gto',
+    generator: GenerateGerberBoardTopSilkscreenLayer
+  },
+  {
+    extension: 'gbo',
+    generator: GenerateGerberBoardBottomSilkscreenLayer
+  },
+  {
+    extension: 'gts',
+    generator: GenerateGerberBoardTopSolderMaskLayer
+  },
+  {
+    extension: 'gbs',
+    generator: GenerateGerberBoardBottomSolderMaskLayer
+  },
+  {
+    extension: 'gml',
+    generator: GenerateGerberBoardEdges
   },
 ];
 
@@ -26,18 +47,31 @@ export function GenerateBoardGerberFiles(
   precision: GerberPrecision,
   name: string,
 ): [string, string][] { // [file name, content]
-  return GERBER_GENERATORS.map((render: IGerberExtensionAndGenerator) => {
+
+  const generate = (render: IGerberExtensionAndGenerator): [string, string] => {
     return [
       `${ name }.${ render.extension }`,
-      GenerateGerberBoardTopLayer(board, precision).join('\n')
+      render.generator(board, precision).join('\n')
     ];
-  });
+  };
+
+  const files: [string, string][] = GERBER_GENERATORS.map(generate);
+
+  for (let i = 2; i < board.layers; i++) {
+    files.push(generate({
+      extension: `gl${ i }`,
+      generator: (board: PCBBoard, precision: GerberPrecision): string[] => {
+        return GenerateGerberBoardCopperLayer(board, 1, `CopperLayer${ i }`, precision);
+      }
+    }));
+  }
+  return files;
 }
 
 
 export function GenerateGerberBoardLayerHeaders(layerName: string): string[] {
   return GenerateGerberHeaders([
-    [`Format`, ` Gerber RS-274X`],
+    [`Format`, `Gerber RS-274X`],
     [`Layer`, layerName],
     [`Generated Date`, new Date().toUTCString()],
     // [`Created Using`, `PCBTS`],
@@ -45,25 +79,96 @@ export function GenerateGerberBoardLayerHeaders(layerName: string): string[] {
 }
 
 
-export function GenerateGerberBoardTopLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+/** COPPER **/
+
+export function GenerateGerberBoardTopCopperLayer(board: PCBBoard, precision: GerberPrecision): string[] {
   return GenerateGerberBoardCopperLayer(board, 0, `TopCopper`, precision);
 }
 
-export function GenerateGerberBoardBottomLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+export function GenerateGerberBoardBottomCopperLayer(board: PCBBoard, precision: GerberPrecision): string[] {
   return GenerateGerberBoardCopperLayer(board, -1, `BottomCopper`, precision);
 }
 
 export function GenerateGerberBoardCopperLayer(
   board: PCBBoard,
   layer: number,
-  name: string,
+  layerName: string,
+  precision: GerberPrecision,
+): string[] {
+  return GenerateGerberLayerFileContentFromMaterials(board.getCopper(layer), layerName, precision);
+}
+
+
+/** SILKSCREEN **/
+
+export function GenerateGerberBoardTopSilkscreenLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+  return GenerateGerberBoardSilkscreenLayer(board, 0, `TopSilkscreen`, precision);
+}
+
+export function GenerateGerberBoardBottomSilkscreenLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+  return GenerateGerberBoardSilkscreenLayer(board, -1, `BottomSilkscreen`, precision);
+}
+
+export function GenerateGerberBoardSilkscreenLayer(
+  board: PCBBoard,
+  layer: number,
+  layerName: string,
+  precision: GerberPrecision,
+): string[] {
+  return GenerateGerberLayerFileContentFromMaterials(board.getSilkscreen(layer), layerName, precision);
+}
+
+
+/** SOLDER MASK **/
+
+export function GenerateGerberBoardTopSolderMaskLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+  return GenerateGerberBoardSolderMaskLayer(board, 0, `TopSolderMask`, precision);
+}
+
+export function GenerateGerberBoardBottomSolderMaskLayer(board: PCBBoard, precision: GerberPrecision): string[] {
+  return GenerateGerberBoardSolderMaskLayer(board, -1, `BottomSolderMask`, precision);
+}
+
+export function GenerateGerberBoardSolderMaskLayer(
+  board: PCBBoard,
+  layer: number,
+  layerName: string,
+  precision: GerberPrecision,
+): string[] {
+  return GenerateGerberLayerFileContentFromMaterials(board.getSolderMask(layer), layerName, precision);
+}
+
+
+/** SOLDER MASK **/
+
+export function GenerateGerberBoardEdges(board: PCBBoard, precision: GerberPrecision): string[] {
+  return [
+    ...GenerateGerberBoardLayerHeaders(`BoardEdges`),
+    ...GenerateGerber(
+      [
+        new PerimeterShape({
+          thickness: 0.2,
+          path: board.edges
+        })
+      ],
+      precision
+    )
+  ];
+}
+
+
+/** GENERIC **/
+
+export function GenerateGerberLayerFileContentFromMaterials(
+  materials: PCBMaterial[],
+  layerName: string,
   precision: GerberPrecision,
 ): string[] {
   return [
-    ...GenerateGerberBoardLayerHeaders(name),
+    ...GenerateGerberBoardLayerHeaders(layerName),
     ...GenerateGerber(
-      board.getCopper(layer)
-        .map((material: PCBCopper) => {
+      materials
+        .map((material: PCBMaterial) => {
           return material.shapes;
         })
         .flat(),
