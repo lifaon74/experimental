@@ -1,7 +1,8 @@
 import { IShapePathSegmentOptions, ShapePathSegment } from '../../shape-path-segment';
-import { mat3, vec2 } from 'gl-matrix';
-import { MATH_PHI, NULL_VEC2, TMP_VEC2 } from '../../../../../objects-tree/2d/constants';
+import { vec2 } from 'gl-matrix';
+import { MATH_PHI, NULL_VEC2 } from '../../../../../objects-tree/2d/constants';
 import { CloneProperty } from '../../../../../../misc/cloneable';
+
 
 /**
  * A ShapePathArcTo represents an arc starting at (0, 0) with a specific 'center' and an 'angle' (rad, counter-clockwise if positive)
@@ -28,15 +29,16 @@ export class ShapePathArcTo extends ShapePathSegment implements IShapePathArcToO
     }
   }
 
+  get radius(): number {
+    return vec2.length(this.center);
+  }
+
   isNull(): boolean {
     return (this.angle === 0);
   }
 
-  endPointTransform(out: mat3, transform: mat3): mat3 {
-    const translation: vec2 = vec2.negate(TMP_VEC2, this.center);
-    vec2.rotate(translation, translation, NULL_VEC2, this.angle);
-    vec2.add(translation, translation, this.center);
-    return mat3.translate(out, transform, translation);
+  getEndPoint(out: vec2): vec2 {
+    return vec2.add(out, vec2.rotate(out, vec2.negate(out, this.center), NULL_VEC2, this.angle), this.center);
   }
 
   cloneAsOptions(override?: IShapePathArcToOptions): Required<IShapePathArcToOptions> {

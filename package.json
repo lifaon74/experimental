@@ -76,6 +76,7 @@
     "google-closure-compiler-js": "20170218.0.0"
   },
   "devDependencies": {
+    "@types/jszip": "^3.1.7",
     "@types/node": "latest",
     "browser-sync": "^2.26.7",
     "http-server": "^0.12.1",

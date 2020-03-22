@@ -4,7 +4,7 @@ import { Shape } from './classes/shape/shape';
 import { mat3, vec2 } from 'gl-matrix';
 import { GerberPrecision } from './exporters/gerber-and-excellon/gerber/gerber-precision';
 import { PCBBoard } from './classes/pcb-board/pcb-board';
-import { GenerateGerber } from './exporters/gerber-and-excellon/gerber/generate/functions';
+import { GenerateGerber } from './exporters/gerber-and-excellon/gerber/functions';
 import { Object2DGroup } from './classes/objects-tree/2d/object-2d-group/implementation';
 import { IObject2DGroup } from './classes/objects-tree/2d/object-2d-group/interfaces';
 import { AreaShape } from './classes/shape/build-in/area/area-shape';
@@ -17,7 +17,10 @@ import { PCBCopper } from './classes/pcb-board/pcb-material/built-in/copper/pcb-
 import { PCBSilkscreen } from './classes/pcb-board/pcb-material/built-in/silkscreen/pcb-silkscreen';
 import { ExportBoardToGerberAndExcellon } from './exporters/gerber-and-excellon/export-board-to-gerber-and-excellon';
 import { PCBSolderMask } from './classes/pcb-board/pcb-material/built-in/solder-mask/pcb-solder-mask';
-import { PCBHole } from './classes/pcb-board/pcb-material/built-in/hole/pcb-hole';
+import { PCBDrill } from './classes/pcb-board/pcb-material/built-in/drill/pcb-drill';
+import { PCBPartGroup } from './classes/pcb-board/pcb-part-group/pcb-part-group';
+import { BOM } from './classes/pcb-board/bom/bom';
+import { DetectDrillHoleFromShape, GenerateExcellon } from './exporters/gerber-and-excellon/excellon/functions';
 
 
 /**
@@ -84,7 +87,9 @@ export function pad(layer: TPCBLayer, width: number, height: number): PCBPart {
 export function circular_pad(layer: TPCBLayer, radius: number): PCBPart {
   VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
 
-  const area: AreaShape = new AreaShape(AreaShape.circle(radius));
+  const area: AreaShape = new AreaShape({
+    path: ShapePath.circle(radius)
+  });
 
   return new PCBPart({
     materials: [
@@ -104,24 +109,44 @@ export function circular_pad(layer: TPCBLayer, radius: number): PCBPart {
   });
 }
 
-export function through_hole(innerRadius: number, border: number): PCBPart {
-  const outerRadius: number = innerRadius + border;
-
+export function hole(radius: number): PCBPart {
   return new PCBPart({
     materials: [
-      circular_pad('top', outerRadius),
-      circular_pad('bottom', outerRadius),
-      new PCBHole({
+      new PCBDrill({
         shapes: [
-          new AreaShape(AreaShape.circle(innerRadius))
+          new AreaShape({
+            path: ShapePath.circle(radius)
+          })
         ]
-      }),
+      })
     ]
   });
 }
 
+export function through_hole(innerRadius: number, border: number): PCBPartGroup {
+  const outerRadius: number = innerRadius + border;
+  return new PCBPartGroup({
+    children: [
+      circular_pad('top', outerRadius),
+      circular_pad('bottom', outerRadius),
+      hole(innerRadius),
+    ]
+  });
+}
 
+export function via(innerRadius: number = 0.1, border: number = 0.1): PCBPartGroup {
+  return through_hole(innerRadius, border);
+}
+
+/**
+ * Creates the silkscreen for an integrated circuit
+ * - origin: bottom left corner
+ * - mark: top left corner
+ * - not inverted if bottom layer
+ */
 export function ic_silkscreen(layer: TPCBLayer, width: number, height: number): PCBPart {
+  VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
+
   const thickness: number = 0.2;
   const markSpacing: number = 0.2;
   const markRadius: number = 0.3;
@@ -142,34 +167,74 @@ export function ic_silkscreen(layer: TPCBLayer, width: number, height: number): 
       new PCBSilkscreen({
         layer: layer,
         shapes: [
-          new AreaShape(AreaShape.circle(markRadius, mat3.fromTranslation(mat3.create(), vec2.fromValues(markOffset, height - markOffset))))
+          new AreaShape({
+            modelMatrix: mat3.fromTranslation(mat3.create(), vec2.fromValues(markOffset, height - markOffset)),
+            path: ShapePath.circle(markRadius),
+          })
         ]
       })
     ]
   });
 }
 
-// TODO should take array of pin with descriptions ['VCC', GND, etc...]
-export function soic(layer: TPCBLayer, pinCount: number): IObject2DGroup<PCBPart> {
+/**
+ * Creates a SOIC footprint
+ *  - origin: bottom left pad
+ *  - mark: top left corner
+ *  - not inverted if bottom layer
+ */
+export function soic(layer: TPCBLayer, pins: string[]): PCBPartGroup {
   VerifyPCBLayerIsExternal(NormalizePCBLayer(layer));
 
   const padWidth: number = 2.2;
   const padHeight: number = 0.6;
-  const padSpacing: number = 3.0;
-  const padXDistance: number = padWidth + padSpacing;
-  const padYDistance: number = 1.27;
+  const padXSpacing: number = 3.0;
+  const padXOffset: number = padWidth + padXSpacing;
+  const padYOffset: number = 1.27;
   const silkScreenSpacing: number = 0.1;
 
-  return new Object2DGroup<PCBPart>({
+  return new PCBPartGroup({
     children: [
-      ...Array.from<void, PCBPart>({ length: pinCount }, (v: any, index: number) => {
+      ...pins.map((pinName: string, index: number) => {
+        const x: number = Math.floor(index / 8);
         return pad(layer, padWidth, padHeight)
-          .translate([(index % 2) * padXDistance, Math.floor(index / 2) * padYDistance]);
+          .translate([
+            x * padXOffset,
+            (((x * -7) + index) % 8) * padYOffset
+          ])
+          .setComment(`Pin: ${ pinName }`)
       }),
-      ic_silkscreen(layer, padSpacing - (silkScreenSpacing * 2), padYDistance * Math.ceil(pinCount / 2))
-        .translate([padWidth + silkScreenSpacing, -(padYDistance / 4)]),
+      ic_silkscreen(layer, padXSpacing - (silkScreenSpacing * 2), padYOffset * Math.ceil(pins.length / 2))
+        .translate([padWidth + silkScreenSpacing, -(padYOffset / 4)]),
     ]
   });
+}
+
+export function soic_74HC595(id: string, layer: TPCBLayer): PCBPartGroup {
+  return soic(layer, [
+    'Q1',
+    'Q2',
+    'Q3',
+    'Q4',
+    'Q5',
+    'Q6',
+    'Q7',
+    'GND',
+
+    'Q7"',
+    'MR',
+    'SH_CP',
+    'ST_CP',
+    'OE',
+    'DS',
+    'Q0',
+    'VCC',
+  ])
+    .setBom(new BOM({
+      id,
+      comment: '74HC595',
+      footprint: 'SOP-16'
+    }));
 }
 
 
@@ -239,7 +304,7 @@ export async function debugPCB2() {
     // }),
     new AreaShape({
       mode: 'sub',
-      ...Shape.circle(2, mat3.fromTranslation(mat3.create(), vec2.fromValues(5, 5)))
+      path: ShapePath.circle(2),
     }),
   ];
 
@@ -255,14 +320,18 @@ export async function debugPCB3() {
   const precision = new GerberPrecision(3, 3);
 
   const board = new PCBBoard({
-    edges: ShapePath.rectangle(50, 50),
+    edges: ShapePath.rectangle(10, 10),
     layers: 2,
     children: [
-      soic(0, 8),
-      through_hole(0.8, 0.4)
+      // soic_74HC595('IC1', 0)
+      //   .translate([10, 10]),
+      through_hole(2, 3)
       // pad(0, 10, 10)
-      //   .rotate(Math.PI / 4)
-      //   .translate([5, 5]),
+      // circular_pad(0, 10)
+        .rotate(Math.PI / 2)
+        // .uniformScale(2)
+        .translate([5, 5])
+      ,
     ]
   });
 
@@ -277,10 +346,24 @@ export async function debugPCB3() {
 }
 
 
+export async function debugPCBText() {
+  // https://www.w3.org/TR/SVG11/paths.html#PathData
+  const path: string = `M512,800C321.184,800,160,697.408,160,576C160,567.168,167.168,560,176,560C184.832,560,192,567.168,192,576C192,678.272,341.536,768,512,768C520.8,768,528,775.168,528,784C528,792.832,520.832,800,512,800C512,800,512,800,512,800M512,960C229.216,960,0,788.064,0,576C0,443.936,88.928,327.488,224.256,258.368C224.256,257.504,224,256.928,224,256C224,198.624,181.152,136.864,162.304,104.448C162.336,104.448,162.368,104.448,162.368,104.448C160.864,100.928,160,97.056,160,92.992C160,76.992,172.96,64,188.992,64C192,64,197.28,64.8,197.152,64.448C297.152,80.832,391.36,172.704,413.248,199.328C445.216,194.624,478.176,192,512,192C794.72,192,1024,363.936,1024,576C1024,788.064,794.752,960,512,960C512,960,512,960,512,960M512,256C482.656,256,452.544,258.24,422.528,262.624C419.424,263.136,416.32,263.296,413.248,263.296C394.24,263.296,376.032,254.848,363.776,239.936C350.08,223.264,311.104,186.048,265.056,158.688C277.536,187.328,287.296,219.424,287.968,252.512C288.16,254.56,288.256,256.64,288.256,258.4C288.256,282.464,274.784,304.448,253.376,315.392C134.784,375.936,64,473.376,64,576C64,752.448,264.96,896,512,896C758.976,896,960,752.448,960,576C960,399.552,759.008,256,512,256C512,256,512,256,512,256`;
+}
+
+/**
+ * TODO:
+ *  - manage text
+ *  - invert layer
+ *  - pouring
+ *  - holes
+ */
+
 export async function debugPCB() {
   // await debugPCB1();
   // await debugPCB2();
   await debugPCB3();
+  // await debugPCBText();
 }
 
 

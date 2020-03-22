@@ -1,12 +1,14 @@
-import { Shape } from '../../../../classes/shape/shape';
-import { GerberPrecision } from '../gerber-precision';
+import { Shape } from '../../../classes/shape/shape';
+import { GerberPrecision } from './gerber-precision';
 import { GenerateGerberDrawFromShape } from './draw-shapes';
+import { FormatSimpleHeaders } from '../../misc/pad-column';
 
 
 /** GERBER FUNCTIONS **/
 
-
+// todo allow to put headers here
 export function GenerateGerber(shapes: Shape[], precision: GerberPrecision): string [] {
+  ResetApertures();
   return [
     precision.toGerberFormatSpecification(),
     GenerateGerberUsedUnit('mm'),
@@ -33,25 +35,53 @@ export function GenerateGerberComment(comment: string): string {
   return `G04 ${ comment }*`;
 }
 
-export function GenerateGerberHeaders(headers: Iterable<[string, string]>): string[] {
-  const _headers: [string, string][] = Array.from(headers);
-  const maxLength: number = _headers.reduce((maxLength: number, [key]) => {
-    return Math.max(maxLength, key.length);
-  }, 0);
-
-  return _headers.map(([key, value]: [string, string]) => {
-    return GenerateGerberComment(`${ key.padEnd(maxLength + 1, ' ') }:    ${ value }`);
-  });
+export function GenerateGerberCommentHeaders(headers: Iterable<[string, string]>): string[] {
+  return FormatSimpleHeaders(headers)
+    .map(GenerateGerberComment);
 }
 
 
 /* APERTURE */
+
+/**
+ * TODO: instead of using a global aperture map and ids, create and transfer the map for each functions
+ */
 
 let APERTURE_ID: number = 10;
 
 export function GeFreeApertureID(): number {
   return APERTURE_ID++;
 }
+
+const APERTURES: Map<string, number> = new Map<string, number>(); // [template, aperture id]
+
+export interface IGenerateGerberApertureResult {
+  code: string;
+  id: number;
+}
+
+export function GenerateGerberAperture(template: string): IGenerateGerberApertureResult {
+  if (APERTURES.has(template)) {
+    const id: number = APERTURES.get(template) as number;
+    return {
+      id,
+      code: GenerateGerberComment(template /* `re-use aperture ${ id }: ${ template }` */),
+    };
+  } else {
+    const id: number = GeFreeApertureID();
+    APERTURES.set(template, id);
+    return {
+      id,
+      code: GenerateGerberApertureDefinition(id, template),
+    };
+  }
+}
+
+export function ResetApertures(): void {
+  APERTURE_ID = 10;
+  APERTURES.clear();
+}
+
 
 export function GenerateGerberApertureCircleTemplate(diameter: number, hole?: number): string {
   return `C,${ diameter.toString(10) }${ (hole === void 0) ? '' : `X${ hole.toString(10) }` }`;
@@ -77,6 +107,7 @@ export function GenerateGerberAperturePolygonTemplate(
 export function GenerateGerberApertureDCode(id: number): string {
   return `D${ id.toString(10) }`;
 }
+
 
 export function GenerateGerberApertureDefinition(id: number, template: string): string {
   return `%AD${ GenerateGerberApertureDCode(id) }${ template }*%`;

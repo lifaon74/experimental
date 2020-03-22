@@ -1,6 +1,8 @@
 import { IShapePathSegmentOptions, ShapePathSegment } from '../../shape-path-segment';
 import { mat3, vec2 } from 'gl-matrix';
 import { CloneProperty } from '../../../../../../misc/cloneable';
+import { mat3_pre_translate } from '../../../../../objects-tree/2d/objects-2d-transformer/functions';
+
 
 /**
  * A ShapePathLineTo represents a line from (0, 0) to 'end'
@@ -24,8 +26,13 @@ export class ShapePathLineTo extends ShapePathSegment implements IShapePathLineT
     );
   }
 
-  endPointTransform(out: mat3, transform: mat3): mat3 {
-    return mat3.translate(out, transform, this.end);
+  getEndPoint(out: vec2): vec2 {
+    return vec2.copy(out, this.end);
+  }
+
+  getEndPointMatrix(out: mat3, matrix: mat3): mat3 {
+    return mat3_pre_translate(out, matrix, this.end);
+    // return mat3.translate(out, transform, this.end);
   }
 
   cloneAsOptions(override?: IShapePathLineToOptions): Required<IShapePathLineToOptions> {

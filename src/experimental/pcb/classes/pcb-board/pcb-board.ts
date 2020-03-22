@@ -11,7 +11,7 @@ import {
 import { PCBCopper } from './pcb-material/built-in/copper/pcb-copper';
 import { PCBSilkscreen } from './pcb-material/built-in/silkscreen/pcb-silkscreen';
 import { PCBSolderMask } from './pcb-material/built-in/solder-mask/pcb-solder-mask';
-import { PCBHole } from './pcb-material/built-in/hole/pcb-hole';
+import { PCBDrill } from './pcb-material/built-in/drill/pcb-drill';
 
 
 /** PCB BOARD **/
@@ -61,14 +61,14 @@ export class PCBBoard extends PCBPartGroup implements IPCBBoardOptions {
       });
   }
 
-  getHoles(): PCBHole[] {
-    const holes: PCBHole[] = [];
+  getDrill(): PCBDrill[] {
+    const drills: PCBDrill[] = [];
     PCBBoardForEachPCBMaterial(this, (material: PCBMaterial) => {
-      if (material instanceof PCBHole) {
-        holes.push(material);
+      if (material instanceof PCBDrill) {
+        drills.push(material);
       }
     });
-    return holes;
+    return drills;
   }
 
 

@@ -40,7 +40,7 @@ export function IsPCBLayerExternal(layer: number, totalLayers?: number): boolean
 
 export function VerifyPCBLayerIsExternal(layer: number, totalLayers?: number): void {
   if (!IsPCBLayerExternal(layer, totalLayers)) {
-    throw new Error(`PCB layer should be 'top' or 'bottom'`);
+    throw new Error(`PCB layer should be 'top' or 'bottom', got: '${ layer }'`);
   }
 }
 

@@ -1,8 +1,9 @@
-import { PCBBoard } from '../../../../classes/pcb-board/pcb-board';
-import { GerberPrecision } from '../gerber-precision';
-import { GenerateGerber, GenerateGerberHeaders } from './functions';
-import { PCBMaterial } from '../../../../classes/pcb-board/pcb-material/pcb-material';
-import { PerimeterShape } from '../../../../classes/shape/build-in/perimeter/perimeter-shape';
+import { PCBBoard } from '../../../classes/pcb-board/pcb-board';
+import { GerberPrecision } from './gerber-precision';
+import { GenerateGerber, GenerateGerberCommentHeaders } from './functions';
+import { PCBMaterial } from '../../../classes/pcb-board/pcb-material/pcb-material';
+import { PerimeterShape } from '../../../classes/shape/build-in/perimeter/perimeter-shape';
+import { PCBSilkscreen } from '../../../classes/pcb-board/pcb-material/built-in/silkscreen/pcb-silkscreen';
 
 
 export interface IGerberExtensionAndGenerator {
@@ -70,7 +71,7 @@ export function GenerateBoardGerberFiles(
 
 
 export function GenerateGerberBoardLayerHeaders(layerName: string): string[] {
-  return GenerateGerberHeaders([
+  return GenerateGerberCommentHeaders([
     [`Format`, `Gerber RS-274X`],
     [`Layer`, layerName],
     [`Generated Date`, new Date().toUTCString()],
@@ -115,7 +116,21 @@ export function GenerateGerberBoardSilkscreenLayer(
   layerName: string,
   precision: GerberPrecision,
 ): string[] {
-  return GenerateGerberLayerFileContentFromMaterials(board.getSilkscreen(layer), layerName, precision);
+  const silkscreens: PCBSilkscreen[] = board.getSilkscreen(layer);
+  if (layer === 0) {
+    silkscreens.push(
+      new PCBSilkscreen({
+        layer: 0,
+        shapes: [
+          new PerimeterShape({
+            thickness: 0.4,
+            path: board.edges
+          })
+        ]
+      })
+    );
+  }
+  return GenerateGerberLayerFileContentFromMaterials(silkscreens, layerName, precision);
 }
 
 
@@ -147,7 +162,7 @@ export function GenerateGerberBoardEdges(board: PCBBoard, precision: GerberPreci
     ...GenerateGerber(
       [
         new PerimeterShape({
-          thickness: 0.2,
+          thickness: 0,
           path: board.edges
         })
       ],

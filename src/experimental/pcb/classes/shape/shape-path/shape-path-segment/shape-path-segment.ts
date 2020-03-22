@@ -1,4 +1,4 @@
-import { mat3 } from 'gl-matrix';
+import { mat3, vec2 } from 'gl-matrix';
 
 /**
  * A ShapePathSegment represents a segment of a 2D path, like an arc or a line
@@ -20,9 +20,10 @@ export abstract class ShapePathSegment implements IShapePathSegmentOptions {
   abstract isNull(): boolean;
 
   /**
-   * Returns the transform to apply to the next segment
+   * Returns the position of the final point after applying this segment
    */
-  abstract endPointTransform(out: mat3, transform: mat3): mat3;
+  abstract getEndPoint(out: vec2): vec2;
+
 
   cloneAsOptions(override?: IShapePathSegmentOptions): Required<IShapePathSegmentOptions> {
     return {};

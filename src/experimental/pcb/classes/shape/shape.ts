@@ -15,19 +15,6 @@ export interface IShapeOptions extends IObject2DOptions {
 }
 
 export abstract class Shape extends Object2D implements IShapeOptions {
-  static circle(radius: number, transform?: mat3): IShapeOptions {
-    const result = ShapePath.circle(radius);
-    return {
-      path: result.path,
-      modelMatrix: (
-        (transform === void 0)
-          ? result.transform
-          : mat3.multiply(mat3.create(), result.transform, transform)
-        // : mat3.multiply(mat3.create(), transform, result.transform)
-      ),
-    };
-  }
-
   public readonly path: ShapePath;
   public readonly mode: TShapeMode;
 

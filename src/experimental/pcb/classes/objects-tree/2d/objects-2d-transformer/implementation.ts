@@ -3,7 +3,9 @@ import { IObjects2DTransformer } from './interfaces';
 import { ConstructObjects2DTransformer } from './constructor';
 import { IObjects2DTransformerInternal, OBJECTS_2D_TRANSFORMER_PRIVATE } from './privates';
 import { IObject2D } from '../object-2d/interfaces';
-import { TMP_MAT3, TMP_VEC2 } from '../constants';
+
+const TMP_VEC2 = vec2.create();
+const TMP_MAT3 = mat3.create();
 
 /** METHODS **/
 
@@ -49,22 +51,25 @@ export function Objects2DTransformerTransform<TObjects extends IObject2D>(instan
 }
 
 export function Objects2DTransformerTranslate<TObjects extends IObject2D>(instance: IObjects2DTransformer<TObjects>, vector: vec2 | number[]): void {
-  mat3.identity(TMP_MAT3);
-  mat3.translate(TMP_MAT3, TMP_MAT3, vector as vec2);
+  mat3.fromTranslation(TMP_MAT3, vector as vec2);
+  // mat3.identity(TMP_MAT3);
+  // mat3.translate(TMP_MAT3, TMP_MAT3, vector as vec2);
   Objects2DApplyMatrix<TObjects>(instance, TMP_MAT3);
 }
 
 
 export function Objects2DTransformerRotate<TObjects extends IObject2D>(instance: IObjects2DTransformer<TObjects>, rad: number): void {
-  mat3.identity(TMP_MAT3);
-  mat3.rotate(TMP_MAT3, TMP_MAT3, rad);
+  mat3.fromRotation(TMP_MAT3, rad);
+  // mat3.identity(TMP_MAT3);
+  // mat3.rotate(TMP_MAT3, TMP_MAT3, rad);
   Objects2DApplyMatrix<TObjects>(instance, TMP_MAT3);
 }
 
 
 export function Objects2DTransformerScale<TObjects extends IObject2D>(instance: IObjects2DTransformer<TObjects>, vector: vec2 | number[]): void {
-  mat3.identity(TMP_MAT3);
-  mat3.scale(TMP_MAT3, TMP_MAT3, vector as vec2);
+  mat3.fromScaling(TMP_MAT3, vector as vec2);
+  // mat3.identity(TMP_MAT3);
+  // mat3.scale(TMP_MAT3, TMP_MAT3, vector as vec2);
   Objects2DApplyMatrix<TObjects>(instance, TMP_MAT3);
 }
 
@@ -75,7 +80,7 @@ export function Objects2DTransformerUniformScale<TObjects extends IObject2D>(ins
 
 /** FUNCTIONS **/
 
-export function Objects2DApplyMatrix<TObjects extends IObject2D>(instance: IObjects2DTransformer<TObjects>, matrix: mat3 = TMP_MAT3): void {
+export function Objects2DApplyMatrix<TObjects extends IObject2D>(instance: IObjects2DTransformer<TObjects>, matrix: mat3): void {
   const objects: ReadonlyArray<TObjects> = (instance as IObjects2DTransformerInternal<TObjects>)[OBJECTS_2D_TRANSFORMER_PRIVATE].objects;
   for (let i = 0, l = objects.length; i < l; i++) {
     const object: TObjects = objects[i];
