@@ -359,11 +359,23 @@ export async function debugPCBText() {
  *  - holes
  */
 
+// function * testGenerator() {
+//   const distance: number = (yield) | ((yield) << 8) | ((yield) << 16);
+//   const velocity: number = (yield) | ((yield) << 8) | ((yield) << 16);
+//   const acceleration: number = (yield) | ((yield) << 8) | ((yield) << 16);
+//   return {
+//     distance,
+//     velocity,
+//     acceleration
+//   };
+// }
+
 export async function debugPCB() {
   // await debugPCB1();
   // await debugPCB2();
   await debugPCB3();
   // await debugPCBText();
+  // testGenerator();
 }
 
 
