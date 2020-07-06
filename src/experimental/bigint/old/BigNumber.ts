@@ -154,7 +154,7 @@ export abstract class BigNumber {
   }
 
   abstract toNumber(): number;
-  abstract toString(numberToChar?: string[]): string;
+  abstract toString(numberToCharMap?: TNumberToCharMap): string;
 
   /**
    * SYMBOLS

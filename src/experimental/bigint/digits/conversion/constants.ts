@@ -1,14 +1,15 @@
 /** TYPES **/
 
 export type TCharToNumberMap = { [key: string]: number };
+export type TNumberToCharMap = string[];
 
 /** CONSTANTS **/
 
 /**
  * Stores the map from a number to a char
  */
-export const NUMBER_TO_CHAR_MAP: string[] = (() => {
-  const output: string[] = [];
+export const NUMBER_TO_CHAR_MAP: TNumberToCharMap = (() => {
+  const output: TNumberToCharMap = [];
   for (let i = 0; i < 10; i++) { // 0 - 9
     output.push(String.fromCharCode(48 + i));
   }

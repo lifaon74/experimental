@@ -3,6 +3,7 @@
  *  - a > b = 1
  *  - a < b = -1
  *  - a === b = 0
+ *  O(min(length_a, length_b))
  */
 export function DigitsCompare(a: Uint8Array, b: Uint8Array): number {
   const length_a: number = a.length;

@@ -40,6 +40,7 @@ export function AddPrimitiveNumberToDigits(
 /**
  * Adds a primitive number to a list of digits
  * INFO: Expects number positive and non decimal
+ * O(length)
  */
 export function AddPrimitiveNumberToDigitsOptimized(
   buffer: Uint8Array,

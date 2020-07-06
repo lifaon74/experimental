@@ -26,6 +26,7 @@ export function SubtractTwoDigits(
 /**
  * Subtracts two digits where a >= b
  * INFO: expects a >= b
+ * O(max(length_a, length_b))
  */
 export function SubtractTwoDigitsOrdered(
   buffer: Uint8Array,

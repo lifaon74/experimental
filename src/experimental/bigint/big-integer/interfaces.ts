@@ -14,6 +14,8 @@ export interface IBigIntegerStaticConstructor {
    * Converts a string to a BigInteger
    */
   fromString(input: string, base?: number, charToNumber?: TCharToNumberMap): IBigInteger;
+
+  random(size: number, base?: number): IBigInteger;
 }
 
 export interface IBigIntegerConstructor extends IBigIntegerStaticConstructor {

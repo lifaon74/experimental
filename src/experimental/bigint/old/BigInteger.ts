@@ -420,7 +420,7 @@ export class BigInteger extends BigNumber {
       : DigitsToNumberOverflow(this._digits, this._base);
   }
 
-  toString(numberToChar?: string[]): string {
+  toString(numberToCharMap?: TNumberToCharMap): string {
     return this._negative
       ? '-' + DigitsToString(this._digits, numberToChar)
       : DigitsToString(this._digits, numberToChar);

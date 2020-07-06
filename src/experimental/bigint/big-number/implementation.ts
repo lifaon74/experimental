@@ -2,6 +2,8 @@ import { NormalizeBase, NormalizeDigits } from './functions';
 import { IBigNumber } from './interfaces';
 import { ConstructBigNumber } from './constructor';
 import { BIG_NUMBER_PRIVATE, IBigNumberInternal } from './privates';
+import { IQuotientAndRemainder } from '../types';
+import { TNumberToCharMap } from '../digits/conversion/constants';
 
 
 /** METHODS **/
@@ -103,10 +105,15 @@ export abstract class BigNumber implements IBigNumber {
 
   abstract multiply(input: IBigNumber): IBigNumber;
 
-  abstract divide(input: IBigNumber): IBigNumber;
+  divide(input: IBigNumber): IBigNumber {
+    return this.divideWithRemainder(input).quotient;
+  }
 
-  abstract remainder(input: IBigNumber): IBigNumber;
+  remainder(input: IBigNumber): IBigNumber {
+    return this.divideWithRemainder(input).remainder;
+  }
 
+  abstract divideWithRemainder(input: IBigNumber): IQuotientAndRemainder<IBigNumber, IBigNumber>;
 
   abstract negate(): IBigNumber;
 
@@ -122,7 +129,7 @@ export abstract class BigNumber implements IBigNumber {
   }
 
   abstract toNumber(): number;
-  abstract toString(numberToChar?: string[]): string;
+  abstract toString(numberToCharMap?: TNumberToCharMap): string;
 
   /**
    * SYMBOLS

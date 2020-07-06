@@ -7,6 +7,7 @@ export function GetAddTwoDigitsBufferSafeSize(a: Uint8Array, b: Uint8Array): num
 
 /**
  * Adds two digits
+ * O(max(length_a, length_b))
  */
 export function AddTwoDigits(
   buffer: Uint8Array,

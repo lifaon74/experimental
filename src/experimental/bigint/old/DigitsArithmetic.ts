@@ -341,11 +341,6 @@ export function Sub2DigitsOrdered(
 /**
  * Creates compliant buffer for MulDigitsByPrimitiveNumber
  * INFO: Expects number positive and non decimal
- * @param {Uint8Array} input
- * @param {number} base
- * @param {number} number
- * @return {number}
- * @constructor
  */
 export function MulDigitsByPrimitiveNumberBufferSafeSize(
   input: Uint8Array,
@@ -359,12 +354,6 @@ export function MulDigitsByPrimitiveNumberBufferSafeSize(
  * Multiplies a digits list by a primitive number.
  * Does extra checks to fasten computation
  * INFO: Expects number positive and non decimal
- * @param {Uint8Array} buffer
- * @param {Uint8Array} input
- * @param {number} base
- * @param {number} number
- * @return {Uint8Array}
- * @constructor
  */
 export function MulDigitsByPrimitiveNumber(
   buffer: Uint8Array,
@@ -401,13 +390,6 @@ export function MulDigitsByPrimitiveNumberOptimizedCreateSumBuffer(input: Uint8A
 /**
  * Multiplies a digits list by a primitive number
  * Use advanced params.
- * @param {Uint8Array} buffer
- * @param {Uint8Array} input
- * @param {number} base
- * @param {number} number
- * @param {Uint32Array} sumBuffer
- * @return {Uint8Array}
- * @constructor
  */
 export function MulDigitsByPrimitiveNumberOptimized(
   buffer: Uint8Array,
@@ -442,10 +424,6 @@ export function MulDigitsByPrimitiveNumberOptimized(
 
 /**
  * Returns a compliant size for Multiply2Digits
- * @param {Uint8Array} a
- * @param {Uint8Array} b
- * @return {number}
- * @constructor
  */
 export function Mul2DigitsBufferSafeSize(a: Uint8Array, b: Uint8Array): number {
   return (a.length + b.length);

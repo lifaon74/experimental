@@ -2,10 +2,10 @@ import { IBigNumber } from '../big-number/interfaces';
 import { IBigInteger, IBigIntegerConstructor} from './interfaces';
 import { ConstructUninitializedBigNumber } from '../big-number/constructor';
 import { ConstructBigInteger } from './constructor';
-import { BIG_NUMBER_PRIVATE, IBigNumberInternal, IBigNumberPrivate } from '../big-number/privates';
+import { BIG_NUMBER_PRIVATE, IBigNumberPrivate } from '../big-number/privates';
 import { IBigIntegerInternal } from './privates';
 import { GetNumberToDigitsMinLength } from '../digits/conversion/get-number-to-digits-min-length';
-import { TCharToNumberMap } from '../digits/conversion/constants';
+import { TCharToNumberMap, TNumberToCharMap } from '../digits/conversion/constants';
 import { NormalizeBase } from '../big-number/functions';
 import { NumberToDigits } from '../digits/conversion/number-to-digits';
 import { BigNumber } from '../big-number/implementation';
@@ -13,11 +13,15 @@ import { StringToDigits } from '../digits/conversion/string-to-digits';
 import { DigitsNull } from '../digits/comparision/digits-null';
 import { DigitsCompare } from '../digits/comparision/digits-compare';
 import { DigitsEqual } from '../digits/comparision/digits-equal';
-import { CreateBigInteger } from '../old/BigInteger';
-import { DigitsToNumberOverflow } from '../old/DigitsConversion';
 import { GetSubtractTwoDigitsBufferSafeSize, SubtractTwoDigitsOrdered } from '../digits/arithmetic/subtract/subtract-two-digits';
 import { AddTwoDigits, GetAddTwoDigitsBufferSafeSize } from '../digits/arithmetic/add/add-two-digits';
 import { DigitsLowerThan } from '../digits/comparision/digits-lower-than';
+import { GetMultiplyTwoDigitsBufferSafeSize, MultiplyTwoDigits } from '../digits/arithmetic/multiply/multiply-two-digits';
+import { IQuotientAndRemainder } from '../types';
+import { DivideTwoDigits, DivideTwoDigitsQuotientBufferSafeSize, DivideTwoDigitsRemainderBufferSafeSize } from '../digits/arithmetic/divide/divide-two-digits';
+import { DigitsToSafeInteger } from '../digits/conversion/digits-to-number';
+import { DigitsToString } from '../digits/conversion/digits-to-string';
+import { ChangeBaseOfDigitsWithAutoBuffer } from '../digits/base/change-base-of-digits';
 
 /** FUNCTIONS **/
 
@@ -78,6 +82,25 @@ export function BigIntegerStaticFromString(
   return instance;
 }
 
+export function BigIntegerStaticRandom(
+  ctor: IBigIntegerConstructor,
+  size: number,
+  base: number = 10
+): IBigInteger {
+  const output: IBigInteger = ConstructUninitializedBigInteger();
+  const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+
+  privatesOutput.negative = false;
+  privatesOutput.base = NormalizeBase(base);
+  privatesOutput.digits = new Uint8Array(size);
+
+  for (let i = 0; i < size; i++) {
+    privatesOutput.digits[i] = Math.random() * privatesOutput.base;
+  }
+
+  return output;
+}
+
 
 /* GETTERS/SETTERS */
 
@@ -87,6 +110,23 @@ export function BigIntegerGetSign(instance: IBigInteger): number {
 }
 
 /* METHODS */
+
+export function BigIntegerClone(instance: IBigInteger): IBigInteger {
+  return CloneBigInteger(ConstructUninitializedBigInteger(), instance);
+}
+
+function CloneBigInteger(output: IBigInteger, input: IBigInteger, shallow: boolean = false): IBigInteger {
+  if (input !== output) { // for better performances
+    const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+    const privatesInput: IBigNumberPrivate = (input as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+    privatesOutput.negative = privatesInput.negative;
+    privatesOutput.base = privatesInput.base;
+    privatesOutput.digits = shallow
+      ? privatesInput.digits.subarray(0)
+      : privatesInput.digits.slice();
+  }
+  return output;
+}
 
   // COMPARISION
 
@@ -137,7 +177,7 @@ export function BigIntegerAdd(instance: IBigInteger, input: IBigInteger): IBigIn
   }
 }
 
-export function AddTwoBigIntegers(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
+function AddTwoBigIntegers(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
   const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
   const privatesA: IBigNumberPrivate = (a as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
   const privatesB: IBigNumberPrivate = (b as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
@@ -182,7 +222,7 @@ export function BigIntegerSubtract(instance: IBigInteger, input: IBigInteger): I
   }
 }
 
-export function SubtractTwoBigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
+function SubtractTwoBigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
   const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
   const privatesA: IBigNumberPrivate = (a as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
   const privatesB: IBigNumberPrivate = (b as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
@@ -216,11 +256,92 @@ export function SubtractTwoBigInteger(output: IBigInteger, a: IBigInteger, b: IB
 }
 
 
+export function BigIntegerMultiply(instance: IBigInteger, input: IBigInteger): IBigInteger {
+  const instanceBase: number = (instance as IBigIntegerInternal)[BIG_NUMBER_PRIVATE].base;
+  const inputBase: number = (input as IBigIntegerInternal)[BIG_NUMBER_PRIVATE].base;
+
+  if (instanceBase === inputBase) {
+    return MultiplyTwoBigInteger(ConstructUninitializedBigInteger(), instance, input);
+  } else {
+    throw CreateDifferentBaseError(instanceBase, inputBase);
+  }
+}
+
+function MultiplyTwoBigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
+  const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesA: IBigNumberPrivate = (a as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesB: IBigNumberPrivate = (b as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+
+  privatesOutput.base = privatesA.base;
+
+  privatesOutput.digits = MultiplyTwoDigits(
+    new Uint8Array(GetMultiplyTwoDigitsBufferSafeSize(privatesA.digits, privatesB.digits)),
+    privatesA.digits,
+    privatesB.digits,
+    privatesA.base,
+  );
+  privatesOutput.negative = (privatesA.negative !== privatesB.negative);
+
+  return output;
+}
+
+
+export function BigIntegerDivideWithRemainder(instance: IBigInteger, input: IBigInteger): IQuotientAndRemainder<IBigInteger, IBigInteger> {
+  const instanceBase: number = (instance as IBigIntegerInternal)[BIG_NUMBER_PRIVATE].base;
+  const inputBase: number = (input as IBigIntegerInternal)[BIG_NUMBER_PRIVATE].base;
+
+  if (instanceBase === inputBase) {
+    return DivideTwoBigIntegerWithRemainder(
+      ConstructUninitializedBigInteger(),
+      ConstructUninitializedBigInteger(),
+      instance,
+      input,
+    );
+  } else {
+    throw CreateDifferentBaseError(instanceBase, inputBase);
+  }
+}
+
+function DivideTwoBigIntegerWithRemainder(
+  outputQuotient: IBigInteger,
+  outputRemainder: IBigInteger,
+  a: IBigInteger,
+  b: IBigInteger,
+): IQuotientAndRemainder<IBigInteger, IBigInteger> {
+  const privatesOutputQuotient: IBigNumberPrivate = (outputQuotient as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesOutputRemainder: IBigNumberPrivate = (outputRemainder as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesA: IBigNumberPrivate = (a as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesB: IBigNumberPrivate = (b as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+
+  privatesOutputQuotient.base = privatesA.base;
+  privatesOutputRemainder.base = privatesA.base;
+
+  const quotientAndRemainder: IQuotientAndRemainder<Uint8Array, Uint8Array> = DivideTwoDigits(
+    new Uint8Array(DivideTwoDigitsQuotientBufferSafeSize(privatesA.digits)),
+    new Uint8Array(DivideTwoDigitsRemainderBufferSafeSize(privatesA.digits)),
+    privatesA.digits,
+    privatesB.digits,
+    privatesA.base
+  );
+
+  privatesOutputQuotient.digits = quotientAndRemainder.quotient;
+  privatesOutputRemainder.digits = quotientAndRemainder.remainder;
+
+  privatesOutputQuotient.negative = (privatesA.negative !== privatesB.negative);
+  privatesOutputRemainder.negative = privatesA.negative;
+
+  return {
+    quotient: outputQuotient,
+    remainder: outputRemainder,
+  };
+}
+
+
 export function BigIntegerNegate(instance: IBigInteger): IBigInteger {
   return NegateBigInteger(ConstructUninitializedBigInteger(), instance);
 }
 
-export function NegateBigInteger(output: IBigInteger, input: IBigInteger, shallow: boolean = false): IBigInteger {
+function NegateBigInteger(output: IBigInteger, input: IBigInteger, shallow: boolean = false): IBigInteger {
   const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
   const privatesInput: IBigNumberPrivate = (input as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
 
@@ -236,11 +357,53 @@ export function NegateBigInteger(output: IBigInteger, input: IBigInteger, shallo
 }
 
 
+  // CONVERSION
+
+export function BigIntegerToBase(instance: IBigInteger, base: number): IBigInteger {
+  return ChangeBaseOfNegateBigInteger(ConstructUninitializedBigInteger(), instance, base);
+}
+
+function ChangeBaseOfNegateBigInteger(output: IBigInteger, input: IBigInteger, base: number): IBigInteger {
+  const privatesOutput: IBigNumberPrivate = (output as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  const privatesInput: IBigNumberPrivate = (input as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  privatesOutput.base = NormalizeBase(base);
+
+  if (privatesOutput.base === privatesInput.base) {
+    privatesOutput.digits = privatesInput.digits.slice();
+  } else {
+    privatesOutput.digits = ChangeBaseOfDigitsWithAutoBuffer(
+      privatesInput.digits,
+      privatesInput.base,
+      privatesOutput.base,
+    );
+  }
+
+  privatesOutput.negative = privatesInput.negative;
+
+  return output;
+}
+
+
+export function BigIntegerToNumber(instance: IBigInteger): number {
+  const privates: IBigNumberPrivate = (instance as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  return privates.negative
+    ? -DigitsToSafeInteger(privates.digits, privates.base)
+    : DigitsToSafeInteger(privates.digits, privates.base);
+}
+
+export function BigIntegerToString(instance: IBigInteger, numberToCharMap?: TNumberToCharMap): string {
+  const privates: IBigNumberPrivate = (instance as IBigIntegerInternal)[BIG_NUMBER_PRIVATE];
+  return privates.negative
+    ? '-' + DigitsToString(privates.digits, numberToCharMap)
+    : DigitsToString(privates.digits, numberToCharMap);
+}
+
+
+
 /** CLASS **/
 
 
 export class BigInteger extends BigNumber implements IBigNumber {
-
 
   static fromNumber(input: number, base?: number): IBigInteger {
     return BigIntegerStaticFromNumber(this, input, base);
@@ -251,110 +414,14 @@ export class BigInteger extends BigNumber implements IBigNumber {
     return BigIntegerStaticFromString(this, input, base, charToNumber);
   }
 
-  // /**
-  //  * Creates a BigInteger filled with random numbers
-  //  * @param {number} size
-  //  * @param {number} base
-  //  * @return {BigInteger}
-  //  */
-  // static random(size: number, base: number = 10): IBigInteger {
-  //   const output: IBigInteger = CreateBigInteger();
-  //
-  //   privatesOutput.negative = false;
-  //   privatesOutput.base = NormalizeBase(base);
-  //   privatesOutput.digits = new Uint8Array(size);
-  //
-  //   for (let i = 0; i < size; i++)  {
-  //     privatesOutput.digits[i] = Math.random() * privatesOutput.base;
-  //   }
-  //
-  //   return output;
-  // }
-  //
-  //
-  //
-  // protected static Clone(output: IBigInteger, input: IBigInteger, shallow: boolean = false): IBigInteger {
-  //   if (input !== output) { // for better performances
-  //     privatesOutput.negative = privatesInput.negative;
-  //     privatesOutput.base = privatesInput.base;
-  //     privatesOutput.digits = shallow ? privatesInput.digits.subarray(0) : privatesInput.digits.slice();
-  //   }
-  //   return output;
-  // }
-  //
+  static random(size: number, base?: number): IBigInteger {
+    return BigIntegerStaticRandom(this, size, base);
+  }
+
   // protected static Shift(output: IBigInteger, input: IBigInteger, shift: number): IBigInteger {
   //   privatesOutput.negative = privatesInput.negative;
   //   privatesOutput.base = privatesInput.base;
   //   privatesOutput.digits = $ShiftDigits(privatesInput.digits, shift); // TODO may optimize if input === output ?
-  //   return output;
-  // }
-  //
-  // protected static Negate(output: IBigInteger, input: IBigInteger, shallow: boolean = false): IBigInteger {
-  //   privatesOutput.negative = !privatesInput.negative;
-  //   if (input !== output) { // for better performances
-  //     privatesOutput.base = privatesInput.base;
-  //     privatesOutput.digits = shallow ? privatesInput.digits.subarray(0) : privatesInput.digits.slice();
-  //   }
-  //   return output;
-  // }
-  //
-  // protected static Mul2BigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
-  //   privatesOutput.base = privatesA.base;
-  //
-  //   privatesOutput.digits = Mul2Digits(new Uint8Array(Mul2DigitsBufferSafeSize(privatesA.digits, privatesB.digits)), privatesA.digits, privatesB.digits, privatesA.base);
-  //   privatesOutput.negative = (privatesA.negative !== privatesB.negative);
-  //
-  //   return output;
-  // }
-  //
-  // protected static Div2BigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
-  //   privatesOutput.base = privatesA.base;
-  //
-  //   privatesOutput.digits = Div2Digits(
-  //     new Uint8Array(Div2DigitsQuotientBufferSafeSize(privatesA.digits)),
-  //     new Uint8Array(Div2DigitsRemainderBufferSafeSize(privatesA.digits)),
-  //     privatesA.digits,
-  //     privatesB.digits,
-  //     privatesA.base
-  //   )[0];
-  //
-  //   privatesOutput.negative = (privatesA.negative !== privatesB.negative);
-  //
-  //   return output;
-  // }
-  //
-  // protected static Mod2BigInteger(output: IBigInteger, a: IBigInteger, b: IBigInteger): IBigInteger {
-  //   privatesOutput.base = privatesA.base;
-  //
-  //   privatesOutput.digits = Div2Digits(
-  //     new Uint8Array(Div2DigitsQuotientBufferSafeSize(privatesA.digits)),
-  //     new Uint8Array(Div2DigitsRemainderBufferSafeSize(privatesA.digits)),
-  //     privatesA.digits,
-  //     privatesB.digits,
-  //     privatesA.base
-  //   )[1];
-  //
-  //   privatesOutput.negative = privatesA.negative;
-  //
-  //   return output;
-  // }
-  //
-  //
-  // protected static ToBase(output: IBigInteger, input: IBigInteger, base: number): IBigInteger {
-  //   privatesOutput.base = NormalizeBase(base);
-  //
-  //   if (privatesOutput.base === privatesInput.base) {
-  //     privatesOutput.digits = privatesInput.digits.slice();
-  //   } else {
-  //     privatesOutput.digits = $ChangeBaseOfDigits(
-  //       privatesInput.digits,
-  //       privatesInput.base,
-  //       privatesOutput.base,
-  //     );
-  //   }
-  //
-  //   privatesOutput.negative = privatesInput.negative;
-  //
   //   return output;
   // }
 
@@ -368,11 +435,10 @@ export class BigInteger extends BigNumber implements IBigNumber {
     return BigIntegerGetSign(this);
   }
 
+  clone(): IBigInteger {
+    return BigIntegerClone(this);
+  }
 
-  // clone(): IBigInteger {
-  //   return BigInteger.Clone(CreateBigInteger(), this);
-  // }
-  //
   // shift(value: number): IBigInteger {
   //   return BigInteger.Shift(CreateBigInteger(), this, value);
   // }
@@ -423,30 +489,12 @@ export class BigInteger extends BigNumber implements IBigNumber {
     return BigIntegerSubtract(this, input);
   }
 
-  // TODO continue here
-
   multiply(input: IBigInteger): IBigInteger {
-    if (privates.base === privatesInput.base) {
-      return BigInteger.Mul2BigInteger(CreateBigInteger(), this, input);
-    } else {
-      throw CreateDifferentBaseError(privates.base, privatesInput.base);
-    }
+    return BigIntegerMultiply(this, input);
   }
 
-  divide(input: IBigInteger): IBigInteger {
-    if (privates.base === privatesInput.base) {
-      return BigInteger.Div2BigInteger(CreateBigInteger(), this, input);
-    } else {
-      throw CreateDifferentBaseError(privates.base, privatesInput.base);
-    }
-  }
-
-  remainder(input: IBigInteger): IBigInteger {
-    if (privates.base === privatesInput.base) {
-      return BigInteger.Mod2BigInteger(CreateBigInteger(), this, input);
-    } else {
-      throw CreateDifferentBaseError(privates.base, privatesInput.base);
-    }
+  divideWithRemainder(input: IBigInteger): IQuotientAndRemainder<IBigInteger, IBigInteger> {
+    return BigIntegerDivideWithRemainder(this, input);
   }
 
 
@@ -454,29 +502,21 @@ export class BigInteger extends BigNumber implements IBigNumber {
     return BigIntegerNegate(this);
   }
 
-  // TODO
-  // pow(): IBigInteger {
-  //   return BigInteger.Negate(CreateBigInteger(), this);
-  // }
 
   /**
    * CONVERSION
    */
 
   toBase(base: number): IBigInteger {
-    return BigInteger.ToBase(CreateBigInteger(), this, base);
+    return BigIntegerToBase(this, base);
   }
 
   toNumber(): number {
-    return privates.negative
-      ? -DigitsToNumberOverflow(privates.digits, privates.base)
-      : DigitsToNumberOverflow(privates.digits, privates.base);
+    return BigIntegerToNumber(this);
   }
 
-  toString(numberToChar?: string[]): string {
-    return privates.negative
-      ? '-' + DigitsToString(privates.digits, numberToChar)
-      : DigitsToString(privates.digits, numberToChar);
+  toString(numberToCharMap?: TNumberToCharMap): string {
+    return BigIntegerToString(this);
   }
 
 

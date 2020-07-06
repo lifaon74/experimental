@@ -1,3 +1,5 @@
+import { IQuotientAndRemainder } from '../types';
+import { TNumberToCharMap } from '../digits/conversion/constants';
 
 
 /** INTERFACES **/
@@ -46,6 +48,8 @@ export interface IBigNumber {
 
   remainder(input: IBigNumber): IBigNumber;
 
+  divideWithRemainder(input: IBigNumber): IQuotientAndRemainder<IBigNumber, IBigNumber>;
+
 
   negate(): IBigNumber;
 
@@ -60,5 +64,5 @@ export interface IBigNumber {
 
   toNumber(): number;
 
-  toString(numberToChar?: string[]): string;
+  toString(numberToCharMap?: TNumberToCharMap): string;
 }

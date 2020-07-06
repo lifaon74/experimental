@@ -139,7 +139,7 @@ export function FloatDigitsToString(
   [digits, shift]: TFloatDigits,
   base: number,
   options?: FloatDigitsToStringOptions,
-  numberToChar: string[] = _numberToChar,
+  numberToChar: TNumberToCharMap = _numberToChar,
 ): string {
   const _options: FloatDigitsToStringOptionsNormalized = NormalizeFloatDigitsToStringOptions(options);
   let string: string = '';
