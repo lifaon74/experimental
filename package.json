@@ -98,6 +98,7 @@
     "wait-on": "^4.0.0"
   },
   "dependencies": {
+    "@lifaon/class-factory": "^1.1.1",
     "@lifaon/path": "^1.1.2",
     "gl-matrix": "^3.2.1",
     "jszip": "^3.2.2"

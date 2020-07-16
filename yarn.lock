@@ -42,6 +42,11 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
+"@lifaon/class-factory@^1.1.1":
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/@lifaon/class-factory/-/class-factory-1.1.1.tgz#548eb670812fe2c812865c365a160b6e1dc918c8"
+  integrity sha512-zxu1Kp7Tzb/n2UGBo6t4/3CG3S+aXYUxuyc567aQKpyqmeKc6RBlWlddBrfe/9F3WVOVHxPo1KY+fptmOOCnpw==
+
 "@lifaon/path@^1.1.2":
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/@lifaon/path/-/path-1.1.2.tgz#abf953566066d9d8b4d4ba5e847408211f2b200e"
