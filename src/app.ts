@@ -1,10 +1,12 @@
 import { testUnit } from './experimental/units/unit';
 import { debugPCB } from './experimental/pcb/debug';
 import { debugBigInt } from './experimental/bigint/debug';
+import { debugUnitV2 } from './experimental/units_v2/debug';
 
 export async function run() {
   // await debugPCB();
-  await debugBigInt();
+  // await debugBigInt();
+  await debugUnitV2();
 }
 
 export function start(mainCallBack: () => (Promise<any> | any)) {

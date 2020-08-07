@@ -1,4 +1,3 @@
-import { TestHelper } from '../../TestHelper';
 import { CreateFloatDigitsBuffer, TFloatDigits } from './BigFloat';
 import { CreateRandomUint8Array } from './BigInteger';
 import { Add2DigitsBufferSafeSize, Add2FloatDigits } from './FloatDigitsArithmetic';
@@ -175,6 +174,6 @@ export async function test(helper: any) {
 }
 
 setTimeout(() => {
-  test(TestHelper).catch(_ => console.log(_));
+  // test(TestHelper).catch(_ => console.log(_));
 }, 500);
 

@@ -1,0 +1,614 @@
+export interface IBasicReadonlyArray<G> {
+  readonly length: number;
+
+  item(index: number): G;
+
+  [Symbol.iterator](): IterableIterator<G>;
+}
+
+export class BasicReadonlyArray<G> implements IBasicReadonlyArray<G> {
+  protected _items: G[];
+
+  constructor(items: Iterable<G>) {
+    this._items = Array.isArray(items)
+      ? items
+      : Array.from(items);
+  }
+
+  get length(): number {
+    return this._items.length;
+  }
+
+  item(index: number): G {
+    if ((0 <= index) && (index < this._items.length)) {
+      return this._items[index];
+    } else {
+      throw new RangeError(`Index out of range`);
+    }
+  }
+
+  [Symbol.iterator]() {
+    return this._items[Symbol.iterator]();
+  }
+}
+
+
+/*----*/
+
+
+export interface IUnitSymbol {
+  readonly value: string;
+  readonly priority: number;
+
+  toString(): string;
+}
+
+
+export class UnitSymbol implements IUnitSymbol {
+  readonly value: string;
+  readonly priority: number;
+
+  constructor(
+    value: string,
+    priority: number = 0,
+  ) {
+    this.value = value;
+    this.priority = priority;
+  }
+
+  toString(): string {
+    return this.value;
+  }
+}
+
+
+// ABSTRACT
+export interface IUnit {
+  // static parse(input: string): IUnit;
+  // to()
+  reduce(): IUnit | null;
+
+  toString(): string;
+}
+
+abstract class Unit implements IUnit {
+  abstract reduce(): IUnit | null;
+
+  abstract toString(): string;
+}
+
+
+export type TUnitValueConverter = (input: number) => number;
+export type TUnitValueConverterFactory = (from: IUnit, to: IUnit) => TUnitValueConverter;
+
+
+export interface IBaseUnit extends IUnit {
+  readonly name: string;
+  readonly symbols: ReadonlySet<IUnitSymbol>;
+  readonly description: string;
+}
+
+export class BaseUnit extends Unit implements IBaseUnit {
+  readonly name: string;
+  readonly symbols: ReadonlySet<IUnitSymbol>;
+  readonly description: string;
+
+  constructor(
+    name: string,
+    symbols: Iterable<IUnitSymbol> = [],
+    description: string = '',
+  ) {
+    super();
+    this.name = name;
+    this.symbols = new Set<IUnitSymbol>(symbols);
+    this.description = description;
+  }
+
+  reduce(): IUnit | null {
+    return this;
+  }
+
+  toString(): string {
+    return (this.symbols.size === 0)
+      ? this.name
+      : this.symbols.values().next().value.toString();
+  }
+}
+
+
+export interface IUnitWithExponent extends IUnit {
+  readonly unit: IBaseUnit;
+  readonly exponent: number;
+}
+
+export type TExponentNotation = 'sup' | '^' | '';
+
+export interface IUnitWithExponentToStringOptions {
+  exponentNotation?: TExponentNotation; // (default: 'sup')
+}
+
+export const DIGITS_TO_SUPER_SCRIPT = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+
+export function NumberToSuperScript(value: number): string {
+  return Array.from(value.toString(10), (char: string) => {
+    switch (char) {
+      case '0':
+        return '⁰';
+      case '1':
+        return '¹';
+      case '2':
+        return '²';
+      case '3':
+        return '³';
+      case '4':
+        return '⁴';
+      case '5':
+        return '⁵';
+      case '6':
+        return '⁶';
+      case '7':
+        return '⁷';
+      case '8':
+        return '⁸';
+      case '9':
+        return '⁹';
+      case '-':
+        return '⁻';
+      case '.':
+        return '\u22C5';
+      default:
+        throw new Error(`Unsupported conversion from char '${ char }' to superscript char`);
+    }
+  }).join('');
+}
+
+export function NumberToExponent(value: number, exponentNotation: TExponentNotation = 'sup'): string {
+  switch (exponentNotation) {
+    case 'sup':
+      return NumberToSuperScript(value);
+    case '^':
+      return `^${ value.toString(10) }`;
+    case '':
+      return value.toString(10);
+    default:
+      throw new TypeError(`Invalid exponentNotation`);
+  }
+}
+
+export class UnitWithExponent extends Unit implements IUnitWithExponent {
+  readonly unit: IBaseUnit;
+  readonly exponent: number;
+
+  constructor(
+    unit: IBaseUnit,
+    exponent: number,
+  ) {
+    super();
+    this.unit = unit;
+    this.exponent = exponent;
+  }
+
+  reduce(): IUnit | null {
+    if (this.exponent === 0) {
+      return null;
+    } else if (this.exponent === 1) {
+      return this.unit/*.reduce()*/; // base unit already reduced
+    } else {
+      return this;
+    }
+  }
+
+  toString(options: IUnitWithExponentToStringOptions = {}): string {
+    if (this.exponent === 0) {
+      return '';
+    } else if (this.exponent === 1) {
+      return this.unit.toString();
+    } else {
+      return `${ this.unit.toString() }${ NumberToExponent(this.exponent, options.exponentNotation) }`;
+    }
+  }
+}
+
+
+/**
+ * https://en.wikipedia.org/wiki/Metric_prefix
+ * Ex: micro
+ */
+export interface IUnitPrefix {
+  readonly name: string;
+  readonly multiplier: number;
+  readonly symbols: ReadonlySet<IUnitSymbol>;
+
+  toString(): string;
+}
+
+export class UnitPrefix implements IUnitPrefix {
+  readonly name: string;
+  readonly multiplier: number;
+  readonly symbols: ReadonlySet<IUnitSymbol>;
+
+  constructor(
+    name: string,
+    multiplier: number,
+    symbols: Iterable<IUnitSymbol> = [],
+  ) {
+    this.name = name;
+    this.multiplier = multiplier;
+    this.symbols = new Set<IUnitSymbol>(symbols);
+  }
+
+  toString(): string {
+    return (this.symbols.size === 0)
+      ? this.name
+      : this.symbols.values().next().value.toString();
+  }
+}
+
+export const SI_UNIT_PREFIXES = [
+  new UnitPrefix(
+    'deci',
+    1e-1,
+    [new UnitSymbol('d')]
+  ),
+  new UnitPrefix(
+    'centi',
+    1e-2,
+    [new UnitSymbol('c')]
+  ),
+  new UnitPrefix(
+    'milli',
+    1e-3,
+    [new UnitSymbol('m')]
+  ),
+  new UnitPrefix(
+    'micro',
+    1e-6,
+    [new UnitSymbol('µ'),
+      new UnitSymbol('u')]
+  ),
+  new UnitPrefix(
+    'nano',
+    1e-9,
+    [new UnitSymbol('n')]
+  ),
+  new UnitPrefix(
+    'pico',
+    1e-12,
+    [new UnitSymbol('p')]
+  ),
+  new UnitPrefix(
+    'femto',
+    1e-15,
+    [new UnitSymbol('f')]
+  ),
+  new UnitPrefix(
+    'atto',
+    1e-18,
+    [new UnitSymbol('a')]
+  ),
+  new UnitPrefix(
+    'zepto',
+    1e-21,
+    [new UnitSymbol('z')]
+  ),
+  new UnitPrefix(
+    'yocto',
+    1e-24,
+    [new UnitSymbol('y')]
+  ),
+  new UnitPrefix(
+    'deca',
+    1e1,
+    [new UnitSymbol('da')]
+  ),
+  new UnitPrefix(
+    'hecto',
+    1e2,
+    [new UnitSymbol('h')]
+  ),
+  new UnitPrefix(
+    'kilo',
+    1e3,
+    [new UnitSymbol('k')]
+  ),
+  new UnitPrefix(
+    'mega',
+    1e6,
+    [new UnitSymbol('M')]
+  ),
+  new UnitPrefix(
+    'giga',
+    1e9,
+    [new UnitSymbol('G')]
+  ),
+  new UnitPrefix(
+    'tera',
+    1e12,
+    [new UnitSymbol('T')]
+  ),
+  new UnitPrefix(
+    'peta',
+    1e15,
+    [new UnitSymbol('P')]
+  ),
+  new UnitPrefix(
+    'exa',
+    1e18,
+    [new UnitSymbol('E')]
+  ),
+  new UnitPrefix(
+    'zetta',
+    1e21,
+    [new UnitSymbol('Z')]
+  ),
+  new UnitPrefix(
+    'yotta',
+    1e24,
+    [new UnitSymbol('Y')]
+  )
+];
+
+
+export type TPrefixedUnitUnit = IBaseUnit | IUnitWithExponent;
+
+export interface IPrefixedUnit extends IUnit {
+  readonly prefix: IUnitPrefix;
+  readonly unit: TPrefixedUnitUnit;
+}
+
+export class PrefixedUnit extends Unit implements IPrefixedUnit {
+  readonly prefix: IUnitPrefix;
+  readonly unit: TPrefixedUnitUnit;
+
+  constructor(
+    prefix: IUnitPrefix,
+    unit: TPrefixedUnitUnit
+  ) {
+    super();
+    this.prefix = prefix;
+    this.unit = unit;
+  }
+
+  reduce(): IUnit | null {
+    if (this.prefix.multiplier === 0) {
+      return null;
+    } else if (this.prefix.multiplier === 1) {
+      return this.unit.reduce();
+    } else {
+      return this;
+    }
+  }
+
+  toString(): string {
+    return `${ this.prefix.toString() }${ this.unit.toString() }`;
+  }
+}
+
+
+export interface IUnitArray extends IBasicReadonlyArray<IUnit> {
+}
+
+export class UnitArray extends BasicReadonlyArray<Unit> implements IUnitArray {
+}
+
+
+export interface IUnitComposition extends IUnit {
+  readonly units: IUnitArray;
+
+  mul(...values: IUnit[]): IUnit;
+
+  div(...values: IUnit[]): IUnit;
+}
+
+export class UnitsComposition extends Unit implements IUnitComposition {
+  readonly units: IUnitArray;
+
+  constructor(
+    units: Iterable<IUnit> = [],
+  ) {
+    super();
+    this.units = new UnitArray(units);
+  }
+
+  invert(): IUnit {
+
+  }
+
+  mul(...units: IUnit[]): IUnit {
+    return new UnitsComposition([
+      this,
+      ...units,
+    ]);
+  }
+
+  div(...units: IUnit[]): IUnit {
+    return new UnitsComposition([
+      this,
+      ...units.map((unit: IUnit) => {
+        throw 'TODO';
+      }),
+    ]);
+  }
+
+  reduce(): IUnit | null {
+    const units: IUnit[] = (this.units as any)._items;
+    // 1) reduce and flatten units
+    const reducedUnits: IUnit[] = [];
+    for (let i = 0, l1 = units.length; i < l1; i++) {
+      const unit: IUnit | null = units[i].reduce();
+      if (unit !== null) {
+        if (unit instanceof UnitsComposition) {
+          for (let j = 0, l2 = (unit.units as any)._items.length; j < l2; j++) {
+            reducedUnits.push((unit.units as any)._items[j]);
+          }
+        } else {
+          reducedUnits.push(unit);
+        }
+      }
+    }
+
+    const groupedUnits: Map<string, IUnitWithExponent> = new Map<string, IUnitWithExponent>();
+    for (let i = 0, l = reducedUnits.length; i < l; i++) {
+      const unit: IUnit = reducedUnits[i];
+      if (unit instanceof BaseUnit) {
+
+      }
+    }
+  }
+
+  toString(): string {
+    return (this.units as any)._items.join('⋅');
+  }
+
+}
+
+
+/*--*/
+
+/*
+export type TNumberOrNumericValue = number | INumericValue;
+
+export interface INumericValue extends IUnit {
+  add(...values: TNumberOrNumericValue[]): INumericValue;
+
+  // sub(...values: TNumberOrNumericValue[]): INumericValue;
+  // mul(...values: TNumberOrNumericValue[]): INumericValue;
+  // div(...values: TNumberOrNumericValue[]): INumericValue;
+  //
+  // equals(...values: TNumberOrNumericValue[]): boolean;
+  // reduce(): INumericValue;
+}
+
+export function NumericValueAdd(instance: INumericValue, values: TNumberOrNumericValue[]): INumericValue {
+  // if (instance instanceof )
+  throw 'TODO';
+}
+
+export abstract class NumericValue extends Unit implements INumericValue {
+  add(...values: TNumberOrNumericValue[]): INumericValue {
+    return NumericValueAdd(this, values);
+  }
+}
+
+
+export interface IUnitValue extends INumericValue {
+  readonly value: number;
+  readonly unit: IPrefixedUnit;
+}
+
+export class UnitValue extends NumericValue implements IUnitValue {
+  readonly value: number;
+  readonly unit: IPrefixedUnit;
+
+  constructor(
+    value: number,
+    unit: IPrefixedUnit,
+  ) {
+    super();
+    this.value = value;
+    this.unit = unit;
+  }
+
+  toString(): string {
+    return `${ this.value } ${ this.unit.toString() }`;
+  }
+}
+
+
+export type TMathOperator =
+  'sum'
+  | 'product'
+  | 'negate'
+  | 'invert';
+
+export interface INumericArray {
+  readonly length: number;
+
+  item(index: number): INumericValue;
+
+  [Symbol.iterator](): IterableIterator<INumericValue>;
+}
+
+export class NumericArray implements INumericArray {
+  protected _items: INumericValue[];
+
+  constructor(items: Iterable<INumericValue>) {
+    this._items = Array.isArray(items)
+      ? items
+      : Array.from(items);
+  }
+
+  get length(): number {
+    return this._items.length;
+  }
+
+  item(index: number): INumericValue {
+    if ((0 <= index) && (index < this._items.length)) {
+      return this._items[index];
+    } else {
+      throw new RangeError(`Index out of range`);
+    }
+  }
+
+  [Symbol.iterator]() {
+    return this._items[Symbol.iterator]();
+  }
+}
+
+
+export interface IMathValue extends INumericValue {
+  readonly operator: TMathOperator;
+}
+
+export abstract class MathValue extends NumericValue implements IMathValue {
+  readonly operator: TMathOperator;
+
+  protected constructor(operator: TMathOperator) {
+    super();
+    this.operator = operator;
+  }
+}
+
+
+export interface IMathSum extends IMathValue {
+  readonly operator: 'sum';
+  readonly values: INumericArray;
+}
+
+// export class MathSum extends MathValue implements IMathSum {
+//   constructor(...values: INumericValue[]) {
+//     super('sum');
+//   }
+// }
+
+export interface IMathProduct extends IMathValue {
+  readonly operator: 'product';
+  readonly values: INumericArray;
+}
+
+export interface IMathNegate extends IMathValue {
+  readonly operator: 'negate';
+  readonly value: INumericValue;
+}
+
+export interface IMathInvert extends IMathValue {
+  readonly operator: 'invert';
+  readonly value: INumericValue;
+}
+
+*/
+
+export async function debugUnitV2() {
+  const second = new BaseUnit('second', [new UnitSymbol('s')]);
+  const meter = new BaseUnit('meter', [new UnitSymbol('m')]);
+  const gram = new BaseUnit('gram', [new UnitSymbol('g')]);
+
+  const squareMeter = new UnitWithExponent(meter, 2);
+  const kiloGram = new PrefixedUnit(SI_UNIT_PREFIXES.find(_ => _.name === 'kilo') as IUnitPrefix, gram);
+
+  // W = kg⋅m2⋅s−3
+  const watt = new UnitsComposition([kiloGram, squareMeter, new UnitWithExponent(second, -3)]);
+
+  // console.log(squareMeter.toString({ exponentAsSuperscript: true }));
+  console.log(watt.toString());
+}
