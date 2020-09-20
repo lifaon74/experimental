@@ -1,5 +1,4 @@
 import { ADDRESS_BYTES_PER_ELEMENT, ReadAddress } from './memory-address';
-import { ReadMappedAddress } from './octree';
 
 /**
  * A subOctreeAddressIndex is the index of the sub octree of a specific octree (so going from in the range [0, 8[)
@@ -31,6 +30,13 @@ export function IsSubOctreeAddressIndexAVoxelOctreeAddress(
   subOctreeAddressIndex: number,
 ): number {
   return ((memory[address] >> subOctreeAddressIndex) & 0x1);
+}
+
+export function IsSubOctreeAddressIndexAVoxelOctreeAddressHavingAddressMask(
+  mask: number,
+  subOctreeAddressIndex: number,
+): number {
+  return ((mask >> subOctreeAddressIndex) & 0x1);
 }
 
 /**

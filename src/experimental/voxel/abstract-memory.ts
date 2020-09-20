@@ -5,10 +5,10 @@ export class AbstractMemory {
 
   private writeIndex: number;
 
-  constructor(sizeOfBuffer: number /* size */ | ArrayBuffer /* buffer */) {
-    this.buffer = (typeof sizeOfBuffer === 'number')
-      ? new ArrayBuffer(sizeOfBuffer)
-      : sizeOfBuffer;
+  constructor(sizeOrBuffer: number /* size */ | ArrayBuffer /* buffer */) {
+    this.buffer = (typeof sizeOrBuffer === 'number')
+      ? new ArrayBuffer(sizeOrBuffer)
+      : sizeOrBuffer;
     this.writeIndex = 0;
   }
 

@@ -186,6 +186,22 @@ export function drawUniformSphereForOctree(
   );
 }
 
+export function drawUniformRedSphereForOctree(
+  memory: Uint8Array,
+  address: number,
+  depth: number,
+  alloc: TAllocFunction,
+) {
+  const material = VoxelMaterial.create(memory, alloc, 255, 0, 0, 255, 0);
+  drawUniformSphereForOctree(
+    memory,
+    address,
+    depth,
+    alloc,
+    material.address
+  );
+}
+
 export function drawRandomSquareForOctree(
   memory: Uint8Array,
   address: number,

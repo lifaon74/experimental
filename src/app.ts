@@ -2,11 +2,13 @@ import { testUnit } from './experimental/units/unit';
 import { debugPCB } from './experimental/pcb/debug';
 import { debugBigInt } from './experimental/bigint/debug';
 import { debugUnitV2 } from './experimental/units_v2/debug';
+import { debugVoxel } from './experimental/voxel/experiment-voxel';
 
 export async function run() {
+  await debugVoxel();
   // await debugPCB();
   // await debugBigInt();
-  await debugUnitV2();
+  // await debugUnitV2();
 }
 
 export function start(mainCallBack: () => (Promise<any> | any)) {

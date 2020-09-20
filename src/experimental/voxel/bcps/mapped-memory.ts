@@ -1,4 +1,4 @@
-import { NO_MATERIAL_ADDRESS } from './material';
+import { NO_MATERIAL_ADDRESS } from '../material';
 
 /**
  * Provides some helpers to map a pointer to another.

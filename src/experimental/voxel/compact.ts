@@ -1,49 +1,23 @@
-import { ADDRESS_BYTES_PER_ELEMENT, ReadAddress, TAllocFunction, WriteAddress } from './memory-address';
+import { ComputeVoxelOctreeMemorySize, VoxelOctree } from './octree';
 import {
-  FindSubOctreeAddressIndex,
-  FindSubOctreeAddressOffset,
-  IsSubOctreeAddressIndexAVoxelOctreeAddress, IsVoxelOctreeComposedOfMaterialsOnly,
-  WriteSubOctreeAddressIndexAsVoxelMaterial
-} from './sub-octree-adress-index';
-import {
-  AreSameMaterials, CopyMaterial, NO_MATERIAL_ADDRESS, VOXEL_MATERIAL_BYTES_PER_ELEMENT, VoxelMaterial
+  AreSameMaterials,
+  AreSameMaterialsAssumingMemoriesAndAddressesDifferent,
+  NO_MATERIAL_ADDRESS,
+  VOXEL_MATERIAL_BYTES_PER_ELEMENT,
+  VoxelMaterial,
 } from './material';
 import {
-  CreateMappedMemories, GetOrCreateMappedMemoryAddressesFromMappedMemories, MapMemory, ResolveMappedAddress,
-  TMappedMemories, TMappedMemoryAddresses
-} from './mapped-memory';
+  ADDRESS_BYTES_PER_ELEMENT,
+  CreateMemoryMap,
+  ReadAddress,
+  TAllocFunction,
+  WriteAddress,
+} from './memory-address';
+import { IsSubOctreeAddressIndexAVoxelOctreeAddress } from './sub-octree-adress-index';
+import { AbstractMemory } from './abstract-memory';
 import {
-  AreSameRemappedVoxelOctrees, CopyRemappedAddress, CopyRemappedVoxelOctree, ReadMappedAddress,
-  VOXEL_OCTREE_BYTES_PER_ELEMENT, VoxelOctree
-} from './octree';
-import { LogMemory } from './abstract-memory';
-
-// export function RemapOctree(
-//   sourceMemory: Uint8Array,
-//   sourceAddress: number,
-//   destinationMemory: Uint8Array,
-//   destinationAddress: number,
-//   alloc: TAllocFunction,
-//   addressesMap: TMappedMemoryAddresses,
-// ): void {
-//   let subOctreeAddress: number = sourceAddress + 1;
-//   let _address: number;
-//   let _mappedAddress: number;
-//
-//   for (let i = 0; i < 8; i++) { // for each sub-tree
-//     _address = ReadAddress(sourceMemory, subOctreeAddress);
-//
-//     if (addressesMap.has())
-//
-//
-//     if (IsSubOctreeAddressIndexAVoxelOctreeAddress(sourceMemory, sourceAddress, i)) {
-//       RemapOctree(sourceMemory, _address, destinationMemory, destinationAddress, alloc, addressesMap);
-//     } else if (_address !== NO_MATERIAL_ADDRESS) {
-//       materials.add(_address);
-//     }
-//     subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-//   }
-// }
+  IncreaseVoxelOctreeDynamicAddresses,
+} from './octree-with-dynamic-address';
 
 export interface CompactSizeOptions {
   compactTime?: number;
@@ -51,504 +25,263 @@ export interface CompactSizeOptions {
 }
 
 
-/******* MATERIALS *******/
-
-/**
- * Returns the list a material addresses, used by a VoxelOctree
- */
-export function ListVoxelOctreeMaterialAddresses(
-  memory: Uint8Array,
-  address: number,
-  materials: Set<number> = new Set<number>()
-): Set<number> {
-  let subOctreeAddress: number = address + 1;
-  let _address: number;
-  for (let i = 0; i < 8; i++) { // for each sub-tree
-    _address = ReadAddress(memory, subOctreeAddress);
-    if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-      ListVoxelOctreeMaterialAddresses(memory, _address, materials);
-    } else if (_address !== NO_MATERIAL_ADDRESS) {
-      materials.add(_address);
-    }
-    subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-  }
-  return materials;
+export interface VoxelOctreeOnSharedMemory {
+  address: number;
+  depth: number;
 }
 
-/**
- * Returns the list of materials used by many Voxel Octrees
- */
-export function ListMultipleVoxelOctreeMaterialAddresses(
+
+// export interface VoxelOctreesOnSharedMemory {
+//   sharedMemory: Uint8Array;
+//   octrees: VoxelOctreeOnSharedMemory[];
+// }
+
+/*--*/
+
+export interface VoxelOctreeWithDynamicAddressOnSharedMemory extends VoxelOctreeOnSharedMemory {
+
+}
+
+// export interface VoxelOctreesWithDynamicAddressOnSharedMemory extends VoxelOctreesOnSharedMemory {
+//   octrees: VoxelOctreeWithDynamicAddressOnSharedMemory[];
+// }
+
+// 1) merge all octrees on the same memory
+// 2) remove duplicate materials
+// 3) reduces octrees children complexity if uniform material
+// 4) remove duplicate octrees
+
+
+/******* MERGE OCTREES *******/
+
+
+export function AreOctreeOnSameMemory(
   octrees: VoxelOctree[],
-): VoxelMaterial[] {
-  const materials: VoxelMaterial[] = [];
+): boolean {
+  let memory: Uint8Array = octrees[0].memory;
+  for (let i = 1, l = octrees.length; i < l; i++) {
+    if (octrees[i].memory !== memory) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function GroupOctreesByMemory(
+  octrees: VoxelOctree[],
+): Map<Uint8Array, VoxelOctree[]> {
+  const map: Map<Uint8Array, VoxelOctree[]> = new Map<Uint8Array, VoxelOctree[]>();
   for (let i = 0, l = octrees.length; i < l; i++) {
     const octree: VoxelOctree = octrees[i];
-    const iterator: Iterator<number> = ListVoxelOctreeMaterialAddresses(octree.memory, octree.address)[Symbol.iterator]();
-    let result: IteratorResult<number>;
-    while (!(result = iterator.next()).done) {
-      materials.push(new VoxelMaterial(octree.memory, result.value));
+    let groupedOctrees: VoxelOctree[]  | undefined = map.get(octree.memory)
+    if (groupedOctrees === void 0) {
+      groupedOctrees = [];
+      map.set(octree.memory, groupedOctrees);
     }
+    groupedOctrees.push(octree);
   }
-  return materials;
+  return map;
 }
 
-
 /**
- * Reduces the complexity of a list of Materials by removing duplicates,
- * and writes them into a new memory
- *  - returns a memoryMap => used to map the old material addresses to the new one
+ * TODO: totally shitty => for faster development, it was not optimized at all
  */
-export function CompactMaterialsByRemovingDuplicates(
-  memory: Uint8Array,
-  alloc: TAllocFunction,
-  materials: VoxelMaterial[], // assumes memory and address already resolved
-  memoriesMap: TMappedMemories,
-): TMappedMemories {
-  const materialsLength: number = materials.length;
-  const available: boolean[] = new Array(materialsLength).fill(true);
-  for (let i = 0, l = materialsLength; i < l; i++) {
-    if (available[i]) {
-      const material1: VoxelMaterial = materials[i];
-      const newAddress: number = alloc(VOXEL_MATERIAL_BYTES_PER_ELEMENT);
-      CopyMaterial(material1.memory, material1.address, memory, newAddress);
-      MapMemory(material1.memory, material1.address, newAddress, memoriesMap);
-
-      for (let j = i + 1; j < materialsLength; j++) {
-        if (available[j]) {
-          const material2: VoxelMaterial = materials[j];
-          if (AreSameMaterials(material1.memory, material1.address, material2.memory, material2.address)) {
-            MapMemory(material2.memory, material2.address, newAddress, memoriesMap, false);
-            available[j] = false;
-          }
-        }
-      }
-    }
-  }
-  return memoriesMap;
-}
-
-
-
-/**
- * Reduces the complexity of a list of Materials by removing duplicated and unused ones
- */
-export function CompactMaterialsFromVoxelOctrees(
-  memory: Uint8Array,
-  alloc: TAllocFunction,
+export function CopyVoxelOctreesOnSharedMemory(
   octrees: VoxelOctree[],
-): TMappedMemories {
-  // list all used materials
-  const usedMaterials: VoxelMaterial[] = ListMultipleVoxelOctreeMaterialAddresses(octrees);
-  // compact materials into the new memory by removing redundant ones
-  return CompactMaterialsByRemovingDuplicates(memory, alloc, usedMaterials, CreateMappedMemories());
+  sharedMemory: Uint8Array,
+  alloc: TAllocFunction,
+): VoxelOctreeOnSharedMemory[] {
+  if (AreOctreeOnSameMemory(octrees)) {
+    const octree: VoxelOctree = octrees[0];
+    alloc(octree.memory.length);
+    sharedMemory.set(octree.memory);
+    return octrees.map((octree: VoxelOctree) => {
+      return {
+        address: octree.address,
+        depth: octree.depth,
+      }
+    });
+  } else {
+    // const grouped: Map<Uint8Array, VoxelOctree[]> = GroupOctreesByMemory(octrees);
+    // let maxSize: number = 0;
+    // const iterator: Iterator<Uint8Array> = grouped.keys();
+    // let result: IteratorResult<Uint8Array>;
+    // while (!(result = iterator.next()).done) {
+    //   maxSize += result.value.length;
+    // }
+    // const memory = new Uint8Array(maxSize);
+    // let allocated: number = 0;
+
+    throw 'TODO';
+  }
 }
 
 
-/******* OCTREES *******/
+export function MakeOctreesDynamic(
+  octrees: VoxelOctreeOnSharedMemory[],
+  sharedMemory: Uint8Array,
+  alloc: TAllocFunction,
+): VoxelOctreeWithDynamicAddressOnSharedMemory[] {
+  const memoryMap: Uint32Array = CreateMemoryMap(sharedMemory.length);
+  for (let i = 0, l = octrees.length; i < l; i++) {
+    const octree: VoxelOctreeOnSharedMemory = octrees[i];
+    IncreaseVoxelOctreeDynamicAddresses(sharedMemory, octree.address, alloc, octree.depth, memoryMap);
+  }
+  return octrees;
+}
 
 
-/**
- * Reduces the complexity of a Voxel Octree by grouping child Materials
- *  - if the 8 child materials are the same, the octree may be removed by replacing its address in its parent by the material address
- *  - we may replace fully transparent materials by NO_MATERIAL_ADDRESS
- *  - INFO: destructive for original memory
- */
-// function CompactVoxelOctreeByGroupingMaterials(
+/******* MATERIALS *******/
+
+// /**
+//  * Returns the list of all material addresses used by a VoxelOctree
+//  */
+// export function ListVoxelOctreeMaterialAddresses(
 //   memory: Uint8Array,
 //   address: number,
-//   destinationMemory: Uint8Array,
-//   addressesMap: TMappedMemoryAddresses,
-// ): number | null {
-//
+//   materials: Set<number> = new Set<number>()
+// ): Set<number> {
 //   let subOctreeAddress: number = address + 1;
 //   let _address: number;
-//   // the common address
-//   // undefined => not computed
-//   // null => no common addresses
-//   // number => common address
-//   let commonAddress: number | null | undefined = void 0;
-//   let compactedAddress: number | null;
-//
-//   for (let i = 0; i < 8; i++) {
+//   for (let i = 0; i < 8; i++) { // for each sub-tree
 //     _address = ReadAddress(memory, subOctreeAddress);
-//     compactedAddress = ResolveMappedAddress(_address, addressesMap);
-//
 //     if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-//       compactedAddress = CompactVoxelOctreeByGroupingMaterials(memory, compactedAddress, destinationMemory, addressesMap);
-//
-//       if (compactedAddress === null) {
-//         commonAddress = null;
-//       } else { // here the sub-octree returned a value so it can be merged
-//         WriteSubOctreeAddressIndexAsVoxelMaterial(memory, address, i); // INFO: destructive because we update the sub-octree king (to material), but we dont directly update the memory address
-//         addressesMap.set(_address, compactedAddress);
-//         // WriteAddress(memory, subOctreeAddress, compactedAddress);
-//       }
-//     } else {
-//       if (
-//         (compactedAddress !== NO_MATERIAL_ADDRESS)
-//         && (destinationMemory[compactedAddress + 3] === 0)
-//       ) { // full transparent => reduce to NO_MATERIAL_ADDRESS
-//         compactedAddress = NO_MATERIAL_ADDRESS;
-//         addressesMap.set(_address, NO_MATERIAL_ADDRESS);
-//         // WriteAddress(memory, subOctreeAddress, compactedAddress);
-//       }
+//       ListVoxelOctreeMaterialAddresses(memory, _address, materials);
+//     } else if (_address !== NO_MATERIAL_ADDRESS) {
+//       materials.add(_address);
 //     }
-//
-//     if (commonAddress === void 0) {
-//       commonAddress = compactedAddress;
-//     } else if ((commonAddress !== null) && (compactedAddress !== commonAddress)) {
-//       commonAddress = null;
-//     }
-//
 //     subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
 //   }
-//
-//   return commonAddress as (number | null);
+//   return materials;
 // }
 //
-//
 // /**
-//  * Reduces the complexity of an Octree by merging same composing Materials
-//  *  - INFO: destructive for original memory
+//  * Returns the list of all material addresses used by many Voxel Octrees
 //  */
-// function CompactVoxelOctreesByGroupingMaterials(
-//   octrees: VoxelOctree[],
-//   memoriesMap: TMappedMemories,
+// export function ListMultipleVoxelOctreeMaterialAddresses(
+//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
+// ): Set<number> {
+//   const materials: Set<number> = new Set<number>()
+//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
+//     ListVoxelOctreeMaterialAddresses(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, materials)
+//   }
+//   return materials;
+// }
+
+/*
+New material address (never seen before):
+- compare with all previously seen materials:
+  - found duplicate => replace (in memory) with the correct address
+- store in 'seen materials' => [this address, patched address]
+Know material:
+  - replace (in memory) with the correct address
+ */
+
+// export function RemoveDuplicateMaterialsFromOctree(
+//   memory: Uint8Array,
+//   address: number,
+//   uniqMaterials: Uint8Array, // list all materials without any duplicates. [0] used to store the length of uniqMaterials
+//   processedMaterials: Map<number, number>, // [processed address, patched address]
 // ): void {
-//   for (let i = 0, l = octrees.length; i < l; i++) {
-//     const octree: VoxelOctree = octrees[i];
-//     CompactVoxelOctreeByGroupingMaterials(
-//       octree.memory,
-//       octree.address,
-//       GetOrCreateMappedMemoryAddressesFromMappedMemories(octree.memory, memoriesMap)
-//     );
+//   let subOctreeAddress: number = address + 1;
+//   let _address: number;
+//   for (let i = 0; i < 8; i++) { // for each sub-tree
+//     _address = ReadAddress(memory, subOctreeAddress);
+//     if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
+//       RemoveDuplicateMaterialsFromOctree(memory, _address, uniqMaterials, processedMaterials);
+//     } else if (_address !== NO_MATERIAL_ADDRESS) {
+//       let patchedAddress: number | undefined = processedMaterials.get(_address);
+//       if (patchedAddress === void 0) {
+//         patchedAddress = _address;
+//         const uniqMaterialsLengthPlusOne: number = uniqMaterials[0] + 1;
+//         for (let j = 1; j < uniqMaterialsLengthPlusOne; j++) {
+//           // console.log('comparing', _address, uniqMaterials[j]);
+//           if (AreSameMaterialsAssumingMemoriesAndAddressesDifferent(memory, _address, memory, uniqMaterials[j])) {
+//             patchedAddress = uniqMaterials[j];
+//             WriteAddress(memory, subOctreeAddress, patchedAddress);
+//             // console.log('duplicate detected', _address, ' -> ', patchedAddress);
+//             break;
+//           }
+//         }
+//         if (patchedAddress === _address) { // no duplicate
+//           // console.log('set uniq', _address);
+//           uniqMaterials[0]++;
+//           uniqMaterials[uniqMaterialsLengthPlusOne] = _address;
+//         }
+//         processedMaterials.set(_address, patchedAddress);
+//       } else {
+//         if (_address !== patchedAddress) {
+//           // console.log('duplicate patched');
+//           WriteAddress(memory, subOctreeAddress, patchedAddress);
+//         }
+//       }
+//     }
+//     subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
+//   }
+// }
+//
+// export function RemoveDuplicateMaterials(
+//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
+// ): void {
+//   const uniqMaterials: Uint8Array = new Uint8Array(octreesOnSameMemory.memory.length / VOXEL_MATERIAL_BYTES_PER_ELEMENT);
+//   const processedMaterials: Map<number, number> = new Map<number, number>();
+//
+//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
+//     RemoveDuplicateMaterialsFromOctree(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, uniqMaterials, processedMaterials);
 //   }
 // }
 
+// export function RebuildOctrees(
+//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
+// ): AbstractMemory {
+//   const memory: AbstractMemory = new AbstractMemory(octreesOnSameMemory.memory.length);
+//   const memoryView: Uint8Array = memory.toUint8Array();
+//   const alloc: TAllocFunction = memory.toAllocFunction();
+//
+//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
+//     DeepCopyVoxelOctree(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, memoryView, alloc);
+//   }
+//
+//   return memory;
+// }
 
 
-/*----------*/
-
-// map from an octree address to its parent addresses
-export type TOctreeAddressToParentOctreeAddressesMap = Map<number, Set<number>>; // Map<address, parentAddresses[]>
-// map from a depth to a list of TOctreeAddressToParentOctreeAddresses
-export type TDepthToOctreeAddressMap = TOctreeAddressToParentOctreeAddressesMap[]; // TOctreeAddressToParentOctreesAddress[depth]
-export type TDepthToOctreeAddressMapList = TDepthToOctreeAddressMap[];
-// map from a depth to a list of TOctreeAddressToParentOctreeAddresses transformed as Uint32Array
-export type TDepthToOctreeAddressMapOptimized = Uint32Array[]; // array[depth]
-
-export const NO_PARENT_VALUE = 0xffffffff;
-
-/**
- * Generates a TDepthToOctreeAddressMap from a specific Voxel Octree
- */
-export function GenerateDepthToOctreeAddressMap(
-  memory: Uint8Array,
-  address: number,
-  depth: number,
-  depthToOctreeAddressMap: TDepthToOctreeAddressMap = Array.from({ length: depth + 1 }, () => new Map<number, Set<number>>()),
-  parentChunkIndex: number = NO_PARENT_VALUE
-): TDepthToOctreeAddressMap {
-  const octreeAddressToParentOctreeAddressesMap: TOctreeAddressToParentOctreeAddressesMap = depthToOctreeAddressMap[depth];
-
-  let _address: number = address + 1;
-
-  if (octreeAddressToParentOctreeAddressesMap.has(address)) {
-    (octreeAddressToParentOctreeAddressesMap.get(address) as Set<number>).add(parentChunkIndex);
-  } else {
-    const set: Set<number> = new Set<number>();
-    octreeAddressToParentOctreeAddressesMap.set(address, set);
-    set.add(parentChunkIndex);
-
-    for (let i = 0; i < 8; i++) {
-      if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-        GenerateDepthToOctreeAddressMap(memory, ReadAddress(memory, _address), depth - 1, depthToOctreeAddressMap, _address);
-      }
-      _address += ADDRESS_BYTES_PER_ELEMENT;
-    }
-  }
-
-  return depthToOctreeAddressMap;
-}
-
-/**
- * Generates a TDepthToOctreeAddressMap for each Voxel Octree
- */
-export function GenerateMultiDepthToOctreeAddressMap(
-  octrees: VoxelOctree[],
-): TDepthToOctreeAddressMapList {
-  return octrees.map((octree: VoxelOctree) => {
-    return GenerateDepthToOctreeAddressMap(octree.memory, octree.address, octree.depth);
-  });
-}
-
-
-/**
- * Returns the highest depth from a list of TDepthToOctreeAddressMap
- */
-export function GetMaxDepthOfDepthToOctreeAddressMapList(
-  depthToOctreeAddressMapList: TDepthToOctreeAddressMapList
-): number {
-  let maxDepth: number = 0;
-  for (let i = 0, l = depthToOctreeAddressMapList.length; i < l; i++) {
-    maxDepth = Math.max(maxDepth, depthToOctreeAddressMapList[i].length - 1);
-  }
-  return maxDepth;
-}
-
-/**
- * Returns the required size to store an OctreeAddressMapOptimized (Uint32Array), from a list of TDepthToOctreeAddressMap for a specific depth
- */
-export function GetOctreeAddressMapOptimizedSize(
-  depthToOctreeAddressMapList: TDepthToOctreeAddressMapList,
-  depth: number,
-): number {
-  let size: number = 0;
-  for (let i = 0, l = depthToOctreeAddressMapList.length; i < l; i++) {
-    const octreeAddressToParentOctreeAddressesMap: TOctreeAddressToParentOctreeAddressesMap = depthToOctreeAddressMapList[i][depth];
-    const values: IterableIterator<Set<number>> = octreeAddressToParentOctreeAddressesMap.values();
-    let result: IteratorResult<Set<number>>;
-    while (!((result = values.next()).done)) {
-      size += 3 + result.value.size;
-    }
-  }
-  return size;
-}
-
-export function GenerateOctreeAddressMapOptimizedAtSpecificDepth(
-  depthToOctreeAddressMapList: TDepthToOctreeAddressMapList,
-  depth: number,
-  data: Uint32Array,
-): void {
-  let dataIndex: number = 0;
-  for (let i = 0, l = depthToOctreeAddressMapList.length; i < l; i++) {
-    const octreeAddressToParentOctreeAddressesMap: TOctreeAddressToParentOctreeAddressesMap = depthToOctreeAddressMapList[i][depth];
-    const entries: IterableIterator<[number, Set<number>]> = octreeAddressToParentOctreeAddressesMap.entries();
-    let entriesResult: IteratorResult<[number, Set<number>]>;
-    while (!((entriesResult = entries.next()).done)) {
-      const set: Set<number> = entriesResult.value[1];
-      data[dataIndex++] = 3 + set.size;
-      data[dataIndex++] = i;
-      data[dataIndex++] = entriesResult.value[0];
-      const parentIndexesIterator: Iterator<number> = set[Symbol.iterator]();
-      let parentIndexesIteratorResult: IteratorResult<number>;
-      while (!(parentIndexesIteratorResult = parentIndexesIterator.next()).done) {
-        data[dataIndex++] = parentIndexesIteratorResult.value;
-      }
-    }
-  }
-}
-
-/**
- * Generates a TDepthToOctreeAddressMapOptimized from a
- * - INFO: [DATA_LENGTH, OCTREE_INDEX, OCTREE_ADDRESS, PARENT_INDEX_0?, PARENT_INDEX_1?, ...?] (repeat)
- */
-export function OptimizeDepthToOctreeAddressMapList(
-  depthToOctreeAddressMapList: TDepthToOctreeAddressMapList
-): TDepthToOctreeAddressMapOptimized {
-  const maxDepthPlusOne: number = GetMaxDepthOfDepthToOctreeAddressMapList(depthToOctreeAddressMapList) + 1;
-  const output: TDepthToOctreeAddressMapOptimized = Array.from({ length: maxDepthPlusOne });
-
-  for (let depth = 0; depth < maxDepthPlusOne; depth++) {
-
-    // first compute the required size for allocation
-    const size: number = GetOctreeAddressMapOptimizedSize(depthToOctreeAddressMapList, depth);
-
-    // then create memory buffer and fill the data
-    const data: Uint32Array = new Uint32Array(size);
-    GenerateOctreeAddressMapOptimizedAtSpecificDepth(
-      depthToOctreeAddressMapList,
-      depth,
-      data
-    );
-    output[depth] = data;
-  }
-
-  return output;
-}
-
-/*-------*/
-
-
-
-export function ExtractCommonMaterialId(
-  memory: Uint8Array,
-  address: number,
-  addressesMap: TMappedMemoryAddresses,
-): number | null {
-  if (IsVoxelOctreeComposedOfMaterialsOnly(memory, address)) {
-
-    let subOctreeAddress: number = address + 1;
-
-    const commonMaterialId: number = ReadMappedAddress(memory, subOctreeAddress, addressesMap);
-    subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-
-    for (let i = 1; i < 8; i++) {
-      if (ReadMappedAddress(memory, subOctreeAddress, addressesMap) !== commonMaterialId) {
-        return null;
-      }
-      subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-    }
-    return commonMaterialId;
-  } else {
-    return null;
-  }
-}
-
-
-
-export function CompactVoxelOctreesByRemovingDuplicates(
-  memory: Uint8Array,
-  alloc: TAllocFunction,
-  octrees: VoxelOctree[],
-  memoriesMap: TMappedMemories,
-  options: CompactSizeOptions = {},
-): VoxelOctree[] {
-  const compactTime = (options.compactTime === void 0)
-    ? Number.POSITIVE_INFINITY
-    : Number(options.compactTime);
-
-  const endTime: number = Date.now() + compactTime;
-  const DISABLED_FLAG = 0x80000000;
-
-  const newOctrees: VoxelOctree[] = octrees.map((octree: VoxelOctree) => {
-    return new VoxelOctree(memory, NO_PARENT_VALUE, octree.depth);
-  });
-
-  const metaDataList: TDepthToOctreeAddressMapOptimized = OptimizeDepthToOctreeAddressMapList(GenerateMultiDepthToOctreeAddressMap(octrees));
-  console.log(metaDataList);
-
-  const metaDataListLength: number = metaDataList.length;
-
-  // debugger;
-
-  for (let depth = 0; depth < metaDataListLength; depth++) {
-    const metaData: Uint32Array = metaDataList[depth];
-    let metaDataIndex: number = 0;
-    let metaDataLength: number = metaData.length;
-
-    while (metaDataIndex < metaDataLength) {
-
-      const metaDataFirstByte: number = metaData[metaDataIndex];
-      const octreeMetaDataLength: number = metaDataFirstByte & 0x7fffffff;
-
-      if (metaDataFirstByte & DISABLED_FLAG) { // is disabled
-        metaDataIndex += octreeMetaDataLength;
-      } else { // new octree
-        metaDataIndex++;
-        const octreeIndex: number = metaData[metaDataIndex++];
-        const octreeMemory: Uint8Array = octrees[octreeIndex].memory;
-        const octreeAddress: number = metaData[metaDataIndex++];
-        const octreeAddressesMap: TMappedMemoryAddresses = GetOrCreateMappedMemoryAddressesFromMappedMemories(octreeMemory, memoriesMap);
-
-        console.log('octreeIndex', octreeIndex);
-        console.log('octreeAddress', octreeAddress);
-
-        const commonMaterialId: number | null = ExtractCommonMaterialId(octreeMemory, octreeAddress, octreeAddressesMap);
-        let mustCreateOctree: boolean = false;
-
-        const newOctreeAddress: number = alloc(0);
-
-        // TODO => finish implementing this compacter
-
-        // update parent octree addresses
-        let parentDataLength: number = octreeMetaDataLength - 3;
-        while (parentDataLength--) {
-          const parentAddress: number = metaData[metaDataIndex++];
-          if (parentAddress === NO_PARENT_VALUE) {
-            mustCreateOctree = true;
-            newOctrees[octreeIndex].address = newOctreeAddress;
-          } else { // has a parent
-            mustCreateOctree = mustCreateOctree || (commonMaterialId === null);
-            const subOctreeAddressIndex: number = FindSubOctreeAddressIndex(octreeMemory, parentAddress, octreeAddress);
-            if (subOctreeAddressIndex === -1) { // TODO debug only
-              throw Error(`Not found`);
-            }
-            WriteSubOctreeAddressIndexAsVoxelMaterial(octreeMemory, parentAddress, subOctreeAddressIndex);
-            MapMemory(octreeMemory, octreeAddress, newOctreeAddress, memoriesMap);
-          }
-        }
-
-        if (mustCreateOctree) {
-          // write octree in output memory
-          const newOctreeAddress: number = alloc(VOXEL_OCTREE_BYTES_PER_ELEMENT);
-          CopyRemappedVoxelOctree(octreeMemory, octreeAddress, memory, newOctreeAddress, octreeAddressesMap);
-        }
-
-
-        // let j: number = i;
-        // while (j < metaDataLength) {
-        //   if (Date.now() > endTime) {
-        //     break;
-        //   }
-        //
-        //   const _metaDataFirstByte: number = metaData[j];
-        //   const _metaDataLength: number = _metaDataFirstByte & 0x7fffffff;
-        //
-        //   if (_metaDataFirstByte & DISABLED_FLAG) { // is disabled
-        //     j += _metaDataLength;
-        //   } else {
-        //     const _octreeIndex: number = metaData[j + 1];
-        //     const _octreeMemory: Uint8Array = octrees[_octreeIndex].memory;
-        //     const _octreeAddress: number = metaData[j + 2];
-        //     if (AreSameRemappedVoxelOctrees(octreeMemory, octreeAddress, _octreeMemory, _octreeAddress, memoriesMap)) { // all values equals => duplicate octree
-        //       metaData[j] |= DISABLED_FLAG; // set disabled flag
-        //       j += 2;
-        //       // update parent meta addresses
-        //       let _parentDataLength: number = _metaDataLength - 2;
-        //       while (_parentDataLength--) {
-        //         const _parentAddress: number = metaData[j++];
-        //         if (_parentAddress === NO_PARENT_VALUE) {
-        //           newOctrees[_octreeIndex].address = newOctreeIndex;
-        //         } else {
-        //           MapMemory(_octreeMemory, _parentAddress, newOctreeIndex, memoriesMap);
-        //         }
-        //       }
-        //     } else {
-        //       j += _metaDataLength;
-        //     }
-        //   }
-        // }
-      }
-    }
-  }
-
-  return newOctrees;
-}
 
 
 export function CompactVoxelOctrees(
-  memory: Uint8Array,
-  alloc: TAllocFunction,
   octrees: VoxelOctree[],
   options: CompactSizeOptions = {},
-): VoxelOctree[] {
+): any {  // TODO type
   if (options.originalSize === void 0) {
-    // compact materials into the new memory by removing duplicates and non used
-    const memoriesMap: TMappedMemories = CompactMaterialsFromVoxelOctrees(memory, alloc, octrees);
+    const sharedMemory: AbstractMemory = new AbstractMemory(2 ** 24); // TODO
+    const sharedMemoryView: Uint8Array = sharedMemory.toUint8Array();
+    const alloc: TAllocFunction = sharedMemory.toAllocFunction();
 
-    console.log(memoriesMap);
+    const octreesOnSharedMemory: VoxelOctreeOnSharedMemory[] = CopyVoxelOctreesOnSharedMemory(octrees, sharedMemoryView, alloc);
+    const octreesWithDynamicAddressOnSharedMemory: VoxelOctreeWithDynamicAddressOnSharedMemory[] = MakeOctreesDynamic(octreesOnSharedMemory, sharedMemoryView, alloc);
+    console.log(octreesWithDynamicAddressOnSharedMemory);
 
-    LogMemory('memory after material compact', memory, alloc);
 
-    // // compact octrees by grouping their materials
-    // CompactVoxelOctreesByGroupingMaterials(octrees, memoriesMap);
+    // TODO continue here:
+    // 1 - compact octrees using dynamic addresses
+    // 2 - remove dynamic addresses from compacted octree (decrease dyn addr)
+    // 3 - regenerate octree, in the smallest possible memory
 
-    return CompactVoxelOctreesByRemovingDuplicates(
-      memory,
-      alloc,
-      octrees,
-      memoriesMap,
-      options
-    );
+    // RemoveDuplicateMaterials(octreesWithDynamicAddressOnSharedMemory);
+
+
+    // const memory = RebuildOctrees(octreesOnSameMemory);
+    //
+    // memory.log('compacted');
+
+    throw 'TODO1';
   } else {
     const size_before: number = options.originalSize;
     const _options: CompactSizeOptions = Object.assign({}, options, { originalSize: void 0 });
     const t1: number = Date.now();
-    const compactedOctrees: VoxelOctree[] = CompactVoxelOctrees(memory, alloc, octrees, _options);
+    const compactedOctrees: any = CompactVoxelOctrees(octrees, _options); // TODO type
     const t2: number = Date.now();
-    const size_after: number = alloc(0);
+    const size_after: number = compactedOctrees.memory.length;
     const size_text3d: number = ((0x1 << (octrees[0].depth + 1)) ** 3) * VOXEL_MATERIAL_BYTES_PER_ELEMENT;
 
     console.log(

@@ -23,6 +23,7 @@ export type TAllocFunction = (size: number) => number;
 
 /**
  * An address is simply a number representing a position into the memory
+ * A dynamic address, is an address which points to another, etc... with a specific depth
  */
 
 // number of bytes used to represent an address into the memory (uint32)
@@ -67,6 +68,22 @@ export function ReadAddress(
 }
 
 /**
+ * Reads a dynamic address from the memory
+ */
+export function ReadDynamicAddress(
+  memory: Uint8Array,
+  address: number,
+  depth: number,
+): number {
+  while (depth >= 0) {
+    address = ReadAddress(memory, address);
+    depth--;
+  }
+  return address;
+}
+
+
+/**
  * Copies the address at sourceMemory[sourceAddress] into destinationMemory[destinationAddress]
  */
 export function CopyAddress(
@@ -106,3 +123,13 @@ export function AreSameMemoriesAndAddresses(
   return (memory1 === memory2)
     && (address1 === address2);
 }
+
+
+export const NOT_MAPPED: number = 0xffffffff;
+
+export function CreateMemoryMap(
+  size: number = 2 ** 31
+): Uint32Array {
+  return new Uint32Array(size).fill(NOT_MAPPED);
+}
+
