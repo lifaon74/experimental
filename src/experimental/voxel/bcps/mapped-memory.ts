@@ -1,4 +1,4 @@
-import { NO_MATERIAL_ADDRESS } from '../material';
+import { NO_MATERIAL } from '../material';
 
 /**
  * Provides some helpers to map a pointer to another.
@@ -77,7 +77,7 @@ export function ResolveMappedMemory(
   memoriesMap: TMappedMemories
 ): number {
   return (
-    (address !== NO_MATERIAL_ADDRESS)
+    (address !== NO_MATERIAL)
     && memoriesMap.has(memory)
   )
     ? ResolveMappedAddress(address, memoriesMap.get(memory) as TMappedMemoryAddresses)

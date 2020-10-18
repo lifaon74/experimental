@@ -1,24 +1,19 @@
 import {
-  ADDRESS_BYTES_PER_ELEMENT,
-  MemoryView,
-  NOT_MAPPED,
-  ReadAddress,
-  TAllocFunction,
+  ADDRESS_BYTES_PER_ELEMENT, CreateMemoryMap, MemoryView, NOT_MAPPED, ReadAddress, TAllocFunction, TMemoryMap,
   WriteAddress,
 } from './memory-address';
-import { NO_MATERIAL_ADDRESS, VOXEL_MATERIAL_BYTES_PER_ELEMENT } from './material';
+import { CopyVoxelMaterial, NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT } from './material';
 import {
-  Convert3DPositionToSubOctreeAddressIndex,
-  IsSubOctreeAddressIndexAVoxelOctreeAddress,
-  SubOctreeAddressIndexToMemoryAddress,
-  WriteSubOctreeAddressIndexAsSubVoxelOctree,
-} from './sub-octree-adress-index';
+  Convert3DPositionToVoxelOctreeChildIndex, IsVoxelOctreeChildIndexAVoxelOctreeAddress,
+  ConvertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex, SetVoxelOctreeChildAsVoxelOctreeUsingIndex,
+} from './octree-children';
+import { VoxelOctreeOnSharedMemory } from './compact';
 
 export const VOXEL_OCTREE_BYTES_PER_ELEMENT = 1 + ADDRESS_BYTES_PER_ELEMENT * 8;
 
 /**
- * Represents a Voxel Octree: it is used to represent a square shape composed of many voxels in a performing manner
- *  - [is-sub-octree: 0b{#0, #1, #2, ...}, address0 (32b), address1 (32b), ...]
+ * Represents a Voxel Octree: it is used to represent a shape composed of many voxels in a performing structure
+ *  - [is-child-voxel-octree: 0b{#0, #1, #2, ...}, child address0 (32b), child address1 (32b), ...]
  */
 export class VoxelOctree extends MemoryView {
   static BYTES_PER_ELEMENT: number = VOXEL_OCTREE_BYTES_PER_ELEMENT;
@@ -26,11 +21,11 @@ export class VoxelOctree extends MemoryView {
   static create(
     memory: Uint8Array,
     alloc: TAllocFunction,
-    depth: number,
+    voxelOctreeDepth: number,
     materialAddress?: number,
   ): VoxelOctree {
-    const voxelOctree = new VoxelOctree(memory, alloc(VOXEL_OCTREE_BYTES_PER_ELEMENT), depth);
-    CreateVoxelOctree(voxelOctree.memory, voxelOctree.address, materialAddress);
+    const voxelOctree = new VoxelOctree(memory, alloc(VOXEL_OCTREE_BYTES_PER_ELEMENT), voxelOctreeDepth);
+    WriteNewVoxelOctreeInMemory(voxelOctree.memory, voxelOctree.address, materialAddress);
     return voxelOctree;
   }
 
@@ -38,15 +33,15 @@ export class VoxelOctree extends MemoryView {
 
   constructor(
     memory: Uint8Array,
-    address: number,
-    depth: number,
+    voxelOctreeAddress: number,
+    voxelOctreeDepth: number,
   ) {
-    super(memory, address);
-    this.depth = depth;
+    super(memory, voxelOctreeAddress);
+    this.depth = voxelOctreeDepth;
   }
 
   get side(): number {
-    return GetVoxelOctreeSideFromDepth(this.depth);
+    return ConvertVoxelOctreeDepthToSide(this.depth);
   }
 }
 
@@ -54,175 +49,301 @@ export class VoxelOctree extends MemoryView {
 /*--------------------------*/
 
 /**
- * Returns the depth of a Voxel Octree from knowing its side
+ * Converts <voxelOctreeSide> to <voxelOctreeDepth>
  */
-export function GetVoxelOctreeDepthFromSide(side: number): number {
+export function ConvertVoxelOctreeSideToDepth(voxelOctreeSide: number): number {
   let depth: number = -1;
-  while ((side & 0x1) === 0) {
-    side >>= 1;
+  while ((voxelOctreeSide & 0x1) === 0) {
+    voxelOctreeSide >>= 1;
     depth++;
   }
 
-  if (side !== 0x1) {
-    throw new Error(`Invalid side ${ side }: must be a power of 2`);
+  if (voxelOctreeSide !== 0x1) {
+    throw new Error(`Invalid side ${ voxelOctreeSide }: must be a power of 2`);
   }
 
   if (depth < 0) {
-    throw new Error(`Invalid side ${ side }: must be greater than 2`);
+    throw new Error(`Invalid side ${ voxelOctreeSide }: must be greater than 2`);
   }
 
   return depth;
 }
 
 /**
- * Returns the side of a Voxel Octree knowing its depth
+ * Converts <voxelOctreeDepth> to <voxelOctreeSide>
  */
-export function GetVoxelOctreeSideFromDepth(depth: number): number {
-  return 2 << depth;
+export function ConvertVoxelOctreeDepthToSide(voxelOctreeDepth: number): number {
+  return 2 << voxelOctreeDepth;
 }
 
+/**
+ * Returns the maximum amount of memory used by a <voxelOctree> with a specific <voxelOctreeDepth>, excluding the memory used by its <voxelMaterial>s
+ */
+export function GetMaximumAmountOfMemoryUsedByAVoxelOctreeExcludingItsVoxelMaterialsFromDepth(voxelOctreeDepth: number): number {
+  return (voxelOctreeDepth === 0)
+    ? VOXEL_OCTREE_BYTES_PER_ELEMENT
+    : (VOXEL_OCTREE_BYTES_PER_ELEMENT + (8 * GetMaximumAmountOfMemoryUsedByAVoxelOctreeExcludingItsVoxelMaterialsFromDepth(voxelOctreeDepth - 1)));
+}
+
+/**
+ * Returns the maximum number of <voxelMaterial>s that a <voxelOctree> with a specific <voxelOctreeDepth> may have
+ */
+export function GetMaximumNumberOfVoxelMaterialsUsedByAVoxelOctreeFromDepth(voxelOctreeDepth: number): number {
+  return ConvertVoxelOctreeDepthToSide(voxelOctreeDepth) ** 3;
+}
+
+/**
+ * Returns the maximum amount of memory used by the <voxelMaterial>s of a <voxelOctree> with a specific <voxelOctreeDepth>
+ */
+export function GetMaximumAmountOfMemoryUsedByTheVoxelMaterialsOfAVoxelOctreeFromDepth(voxelOctreeDepth: number): number {
+  return GetMaximumNumberOfVoxelMaterialsUsedByAVoxelOctreeFromDepth(voxelOctreeDepth) * VOXEL_MATERIAL_BYTES_PER_ELEMENT;
+}
+
+/**
+ * Returns the maximum amount of memory used by a <voxelOctree> with a specific <voxelOctreeDepth>
+ */
+export function GetMaximumAmountOfMemoryUsedByAVoxelOctreeFromDepth(voxelOctreeDepth: number): number {
+  return GetMaximumAmountOfMemoryUsedByAVoxelOctreeExcludingItsVoxelMaterialsFromDepth(voxelOctreeDepth)
+    + GetMaximumAmountOfMemoryUsedByTheVoxelMaterialsOfAVoxelOctreeFromDepth(voxelOctreeDepth);
+}
 
 /*--------------------------*/
 
+/** SUPERFICIAL OPERATIONS **/
 
 /**
- * Creates a Voxel Octree into memory
+ * Writes a new a <voxelOctree> into 'memory'
  */
-export function CreateVoxelOctree(
+export function WriteNewVoxelOctreeInMemory(
   memory: Uint8Array,
-  address: number,
-  materialAddress: number = NO_MATERIAL_ADDRESS,
+  voxelOctreeAddress: number,
+  voxelMaterialAddress: number = NO_MATERIAL,
 ): void {
-  memory[address++] = 0b00000000;
+  memory[voxelOctreeAddress++] = 0b00000000;
   for (let i = 0; i < 8; i++) {
-    WriteAddress(memory, address, materialAddress);
-    address += ADDRESS_BYTES_PER_ELEMENT;
+    WriteAddress(memory, voxelOctreeAddress, voxelMaterialAddress);
+    voxelOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
   }
 }
 
 /**
- * Fast copy of a Voxel Octree into another memory and address
+ * Returns true if the <voxelOctree>s at addresses 'voxelOctreeAddressA' and 'voxelOctreeAddressB' of 'memory' are identical
  */
-export function CopyVoxelOctree(
-  sourceMemory: Uint8Array,
-  sourceAddress: number,
-  destinationMemory: Uint8Array,
-  destinationAddress: number,
-): void {
+export function AreIdenticalVoxelOctreesOnSameMemory(
+  memory: Uint8Array,
+  voxelOctreeAddressA: number,
+  voxelOctreeAddressB: number,
+): boolean {
   for (let i = 0; i < VOXEL_OCTREE_BYTES_PER_ELEMENT; i++) {
-    destinationMemory[destinationAddress + i] = sourceMemory[sourceAddress + i];
+    if (memory[voxelOctreeAddressA + i] !== memory[voxelOctreeAddressB + i]) {
+      return false;
+    }
   }
+  return true;
 }
 
-export function ComputeVoxelOctreeMemorySize(
-  memory: Uint8Array,
-  address: number,
-  depth: number,
-  exploredAddresses: Uint8Array,
-): number {
-  let size: number = VOXEL_OCTREE_BYTES_PER_ELEMENT;
-  let subOctreeAddress: number = address + 1;
-  let _address: number;
-  for (let i = 0; i < 8; i++) { // for each sub-tree
-    _address = ReadAddress(memory, subOctreeAddress);
-    if (exploredAddresses[_address] === 0) {
-      exploredAddresses[_address] = 1;
-      if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-        if (depth > 0) {
-          size += ComputeVoxelOctreeMemorySize(memory, _address, depth - 1, exploredAddresses);
-        } else {
-          throw new Error(`Found child voxel octree at lowest depth`);
-        }
-      } else {
-        size += VOXEL_MATERIAL_BYTES_PER_ELEMENT;
-      }
-    }
-    subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-  }
-  return size;
-}
+
+/** READ / WRITE **/
 
 /**
- * Returns the address of the material composing a Voxel Octree at position (x, y, z)
+ * Returns the <voxelMaterialAddress> at position (x, y, z) of <voxelOctree>
  */
-export function ReadVoxelOctreeMaterialAddress(
+export function ReadVoxelMaterialAddressOfVoxelOctreeAtPosition(
   memory: Uint8Array,
-  address: number,
-  depth: number,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
   x: number,
   y: number,
   z: number,
 ): number {
-  let subOctreeAddressIndex: number;
-  let _address: number; // temp address
+  let voxelOctreeChildIndex: number;
+  let voxelOctreeChildAddress: number;
 
-  while (depth >= 0) {
-    subOctreeAddressIndex = Convert3DPositionToSubOctreeAddressIndex(depth, x, y, z);
-    _address = ReadAddress(memory, SubOctreeAddressIndexToMemoryAddress(address, subOctreeAddressIndex));
-    if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, subOctreeAddressIndex)) {
-      address = _address;
-      depth--;
+  while (voxelOctreeDepth >= 0) {
+    voxelOctreeChildIndex = Convert3DPositionToVoxelOctreeChildIndex(voxelOctreeDepth, x, y, z);
+    voxelOctreeChildAddress = ReadAddress(memory, ConvertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex(voxelOctreeAddress, voxelOctreeChildIndex));
+    if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, voxelOctreeChildIndex)) {
+      voxelOctreeAddress = voxelOctreeChildAddress;
+      voxelOctreeDepth--;
     } else {
-      return _address;
+      return voxelOctreeChildAddress;
     }
   }
 
   throw new Error('Invalid coords');
 }
 
+
 /**
- * Writes a new material address (materialAddress) at position (x, y, z) in a Voxel Octree
- *  - creates new child octrees if required
+ * Writes <voxelMaterialAddress> at position (x, y, z) of a <voxelOctree>
+ *  - may create new <voxelOctree> if required
  */
 export function WriteVoxelOctreeMaterialAddress(
   memory: Uint8Array,
-  address: number,
+  voxelOctreeAddress: number,
   alloc: TAllocFunction,
-  depth: number,
+  voxelOctreeDepth: number,
   x: number,
   y: number,
   z: number,
-  materialAddress: number,
+  voxelMaterialAddress: number,
 ): void {
-  let subOctreeAddressIndex: number;
-  let _subOctreeAddress: number; // temp address of a sub octree's address
-  let _address: number; // temp address
+  let voxelOctreeChildIndex: number;
+  let voxelOctreeChildAddressAddress: number;
+  let voxelOctreeChildAddress: number;
 
-  // insert materialAddress at proper place
-  while (depth >= 0) {
-    subOctreeAddressIndex = Convert3DPositionToSubOctreeAddressIndex(depth, x, y, z);
-    _subOctreeAddress = SubOctreeAddressIndexToMemoryAddress(address, subOctreeAddressIndex);
+  // insert <voxelMaterialAddress> at proper place
+  while (voxelOctreeDepth >= 0) {
+    voxelOctreeChildIndex = Convert3DPositionToVoxelOctreeChildIndex(voxelOctreeDepth, x, y, z);
+    voxelOctreeChildAddressAddress = ConvertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex(voxelOctreeAddress, voxelOctreeChildIndex);
 
-    if (depth === 0) {
-      // for depth === 0 mask should be equals to 'material' by default
-      // WriteAddressSpotAsVoxelMaterial(memory, address, subOctreeAddressIndex)
-      WriteAddress(memory, _subOctreeAddress, materialAddress);
+    if (voxelOctreeDepth === 0) {
+      // for depth === 0 mask should be equals to <voxelMaterialAddress> by default
+      WriteAddress(memory, voxelOctreeChildAddressAddress, voxelMaterialAddress);
       break;
     } else {
-      _address = ReadAddress(memory, _subOctreeAddress);
-      if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, subOctreeAddressIndex)) { // is address type
-        address = _address;
-      } else {
-        if (_address === materialAddress) { // same values
-          break; // here we are not at the deepest lvl, material addresses are the same and octree should already be optimized => touch nothing
-        } else { // material addresses are different => must split current materialAddress into another octree
-          const newAddress: number = alloc(VOXEL_OCTREE_BYTES_PER_ELEMENT); // allocates memory for a new octree
-          CreateVoxelOctree(memory, newAddress, _address); // put current material address as octree's materials
+      voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+      if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, voxelOctreeChildIndex)) { // is <voxelOctreeAddress>
+        voxelOctreeAddress = voxelOctreeChildAddress;
+      } else { // is <voxelMaterialAddress>
+        if (voxelOctreeChildAddress === voxelMaterialAddress) { // same values
+          break; // here we are not at the deepest lvl, <voxelMaterialAddress>es are the same and the <voxelOctree> should already be optimized => touch nothing
+        } else { // <voxelMaterialAddress>es are different => must split current <voxelMaterialAddress> into another <voxelOctree>
+          const newVoxelOctreeAddress: number = alloc(VOXEL_OCTREE_BYTES_PER_ELEMENT); // allocates memory for a new <voxelOctree>
+          WriteNewVoxelOctreeInMemory(memory, newVoxelOctreeAddress, voxelOctreeChildAddress); // initialize the new <voxelOctree> with <voxelMaterialAddress>
 
-          // replace mask value by octree type
-          WriteSubOctreeAddressIndexAsSubVoxelOctree(memory, address, subOctreeAddressIndex);
+          // update mask to <voxelOctreeAddress> type
+          SetVoxelOctreeChildAsVoxelOctreeUsingIndex(memory, voxelOctreeAddress, voxelOctreeChildIndex);
 
-          // replace value by newAddress
-          WriteAddress(memory, _subOctreeAddress, newAddress);
+          // replace the old <voxelMaterialAddress> with the new <voxelOctreeAddress>
+          WriteAddress(memory, voxelOctreeChildAddressAddress, newVoxelOctreeAddress);
 
-          address = newAddress;
+          voxelOctreeAddress = newVoxelOctreeAddress;
         }
       }
     }
 
-    depth--;
+    voxelOctreeDepth--;
   }
 }
 
 
 
+/** EXPLORE **/
+
+/**
+ * Computes the size taken by a <voxelOctree> and all its children (<voxelOctree> and <voxelMaterial>)
+ */
+export function GetAmountOfMemoryUsedByVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  exploredOctreeAddresses: Uint8Array,
+): number {
+  if (exploredOctreeAddresses[voxelOctreeAddress] === 0) {
+    exploredOctreeAddresses[voxelOctreeAddress] = 1;
+    let size: number = VOXEL_OCTREE_BYTES_PER_ELEMENT;
+    let voxelOctreeChildAddressAddress: number = voxelOctreeAddress + 1;
+    let voxelOctreeChildAddress: number;
+    for (let i = 0; i < 8; i++) {
+      voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+      if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, i)) {
+        size += GetAmountOfMemoryUsedByVoxelOctree(memory, voxelOctreeChildAddress, exploredOctreeAddresses);
+      } else if (voxelOctreeAddress !== NO_MATERIAL) {
+        size += VOXEL_MATERIAL_BYTES_PER_ELEMENT;
+      }
+      voxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+    }
+    return size;
+  } else {
+    return 0;
+  }
+}
+
+
+/** CLONE **/
+
+/**
+ * Clones a <voxelMaterial> from one memory to another:
+ *  - uses a memoryMap and an alloc function
+ */
+export function CloneVoxelMaterialOnDifferentMemory(
+  sourceMemory: Uint8Array,
+  sourceVoxelMaterialAddress: number,
+  destinationMemory: Uint8Array,
+  destinationAlloc: TAllocFunction,
+  memoryMap: TMemoryMap,
+): number {
+  let destinationVoxelMaterialAddress: number = memoryMap[sourceVoxelMaterialAddress];
+
+  if (destinationVoxelMaterialAddress === NOT_MAPPED) { // first time we encounter this <voxelMaterialAddress>
+    destinationVoxelMaterialAddress = destinationAlloc(VOXEL_MATERIAL_BYTES_PER_ELEMENT);
+    memoryMap[sourceVoxelMaterialAddress] = destinationVoxelMaterialAddress;
+    CopyVoxelMaterial(sourceMemory, sourceVoxelMaterialAddress, destinationMemory, destinationVoxelMaterialAddress);
+  }
+
+  return destinationVoxelMaterialAddress;
+}
+
+/**
+ * Clones a <voxelOctree> from one memory to another:
+ *  - uses a memoryMap and an alloc function
+ */
+export function CloneVoxelOctreeOnDifferentMemory(
+  sourceMemory: Uint8Array,
+  sourceVoxelOctreeAddress: number,
+  destinationMemory: Uint8Array,
+  destinationAlloc: TAllocFunction,
+  memoryMap: TMemoryMap,
+): number {
+  let destinationVoxelOctreeAddress: number = memoryMap[sourceVoxelOctreeAddress];
+
+  if (destinationVoxelOctreeAddress === NOT_MAPPED) { // first time we encounter this octree address
+    destinationVoxelOctreeAddress = destinationAlloc(VOXEL_OCTREE_BYTES_PER_ELEMENT);
+    memoryMap[sourceVoxelOctreeAddress] = destinationVoxelOctreeAddress;
+
+    let sourceVoxelOctreeChildAddressAddress: number = sourceVoxelOctreeAddress + 1;
+    let destinationVoxelOctreeChildAddressAddress: number = destinationVoxelOctreeAddress + 1;
+
+    let voxelOctreeChildAddress: number;
+    let newVoxelOctreeChildAddress: number;
+
+    for (let i = 0; i < 8; i++) { // for each sub-tree
+      voxelOctreeChildAddress = ReadAddress(sourceMemory, sourceVoxelOctreeChildAddressAddress);
+
+      if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(sourceMemory, sourceVoxelOctreeAddress, i)) {
+        newVoxelOctreeChildAddress = CloneVoxelOctreeOnDifferentMemory(sourceMemory, voxelOctreeChildAddress, destinationMemory, destinationAlloc, memoryMap);
+      } else if (voxelOctreeChildAddress === NO_MATERIAL) {
+        newVoxelOctreeChildAddress = NO_MATERIAL;
+      } else {
+        newVoxelOctreeChildAddress = CloneVoxelMaterialOnDifferentMemory(sourceMemory, voxelOctreeChildAddress, destinationMemory, destinationAlloc, memoryMap);
+      }
+
+      WriteAddress(destinationMemory, destinationVoxelOctreeChildAddressAddress, newVoxelOctreeChildAddress);
+
+      sourceVoxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+      destinationVoxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+    }
+  }
+
+  return destinationVoxelOctreeAddress;
+}
+
+/**
+ * Clones a list of <voxelOctree>s from one memory to another:
+ *  - uses an alloc function
+ */
+export function CloneVoxelOctreesOnDifferentMemory(
+  sourceMemory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+  destinationMemory: Uint8Array,
+  destinationAlloc: TAllocFunction,
+  memoryMap: TMemoryMap = CreateMemoryMap(sourceMemory.length),
+): VoxelOctreeOnSharedMemory[] {
+  return octrees.map((octree: VoxelOctreeOnSharedMemory) => {
+    const destinationVoxelOctreeAddress: number = CloneVoxelOctreeOnDifferentMemory(sourceMemory, octree.address, destinationMemory, destinationAlloc, memoryMap);
+    return {
+      address: destinationVoxelOctreeAddress,
+      depth: octree.depth,
+    }
+  });
+}

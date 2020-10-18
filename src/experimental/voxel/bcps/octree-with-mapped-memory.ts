@@ -1,6 +1,6 @@
 import { ResolveMappedAddress, TMappedMemories, TMappedMemoryAddresses } from './mapped-memory';
 import { ADDRESS_BYTES_PER_ELEMENT, ReadAddress, WriteAddress } from '../memory-address';
-import { NO_MATERIAL_ADDRESS } from '../material';
+import { NO_MATERIAL } from '../material';
 
 export function ReadMappedAddress(
   memory: Uint8Array,
@@ -53,7 +53,7 @@ export function AreSameRemappedAddresses(
   let remappedAddress1: number | undefined;
   let remappedAddress2: number | undefined;
 
-  if (_address1 !== NO_MATERIAL_ADDRESS) {
+  if (_address1 !== NO_MATERIAL) {
     if (memoriesMap.has(memory1)) {
       const subMap: TMappedMemoryAddresses = memoriesMap.get(memory1) as TMappedMemoryAddresses;
       if (subMap.has(_address1)) {
@@ -62,7 +62,7 @@ export function AreSameRemappedAddresses(
     }
   }
 
-  if (_address2 !== NO_MATERIAL_ADDRESS) {
+  if (_address2 !== NO_MATERIAL) {
     if (memoriesMap.has(memory2)) {
       const subMap: TMappedMemoryAddresses = memoriesMap.get(memory2) as TMappedMemoryAddresses;
       if (subMap.has(_address2)) {
@@ -73,30 +73,30 @@ export function AreSameRemappedAddresses(
 
   if (remappedAddress1 === void 0) { // _address1 has not been remapped
     if (remappedAddress2 === void 0) { // _address2 has not been remapped
-      if (_address1 === NO_MATERIAL_ADDRESS) { // _address1 has no material
-        return (_address2 === NO_MATERIAL_ADDRESS); // returns true if _address2 has no material too
-      } else if (_address2 === NO_MATERIAL_ADDRESS) { // _address1 is normal but _address2 has no material
+      if (_address1 === NO_MATERIAL) { // _address1 has no material
+        return (_address2 === NO_MATERIAL); // returns true if _address2 has no material too
+      } else if (_address2 === NO_MATERIAL) { // _address1 is normal but _address2 has no material
         return false;
       } else if (memory1 === memory2) { // _address1 and _address2 are normal, ensures than both memory are the same
         return (_address1 === _address2); // returns true if both addresses are the same
       } else { // _address1 and _address2 are valid, but memories are different, so addresses can't compare
         return false;
       }
-    } else if (remappedAddress2 === NO_MATERIAL_ADDRESS) { // _address2 has been remapped, and remappedAddress2 has no material
-      return (_address1 === NO_MATERIAL_ADDRESS); // returns true if _address1 has no material too
+    } else if (remappedAddress2 === NO_MATERIAL) { // _address2 has been remapped, and remappedAddress2 has no material
+      return (_address1 === NO_MATERIAL); // returns true if _address1 has no material too
     } else { // address2 has been remapped, and _address1 is a normal address => memories are different, so addresses can't compare
       return false;
     }
-  } else if (remappedAddress1 === NO_MATERIAL_ADDRESS) { // _address1 has been remapped, and remappedAddress1 has no material
+  } else if (remappedAddress1 === NO_MATERIAL) { // _address1 has been remapped, and remappedAddress1 has no material
     if (remappedAddress2 === void 0) { // _address2 has not been remapped
-      return (_address2 === NO_MATERIAL_ADDRESS);
+      return (_address2 === NO_MATERIAL);
     } else { // _address2 has been remapped
-      return (remappedAddress2 === NO_MATERIAL_ADDRESS); // returns true if remappedAddress2 has no material too
+      return (remappedAddress2 === NO_MATERIAL); // returns true if remappedAddress2 has no material too
     }
   } else { // _address1 has been remapped
     if (remappedAddress2 === void 0) { // _address2 has not been remapped => memories are different, so addresses can't compare
       return false;
-    } else if (remappedAddress2 === NO_MATERIAL_ADDRESS) {
+    } else if (remappedAddress2 === NO_MATERIAL) {
       return false;
     } else { // both addresses remapped
       return (remappedAddress1 === remappedAddress2);

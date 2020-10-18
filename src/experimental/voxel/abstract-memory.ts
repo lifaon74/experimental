@@ -30,7 +30,7 @@ export class AbstractMemory {
   }
 
   log(message: string): void {
-    console.log(message, this.toUint8Array(0, this.bytesUsed));
+    console.log(message, this.toSmallestUint8Array());
   }
 
   toUint8Array(
@@ -38,6 +38,12 @@ export class AbstractMemory {
     byteLength: number = this.buffer.byteLength,
   ): Uint8Array {
     return new Uint8Array(this.buffer, byteOffset, byteLength);
+  }
+
+  toSmallestUint8Array(
+    byteOffset: number = 0
+  ): Uint8Array {
+    return this.toUint8Array(byteOffset, this.writeIndex);
   }
 
   toAllocFunction(): TAllocFunction {

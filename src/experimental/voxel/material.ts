@@ -1,8 +1,9 @@
 import { AreSameMemoriesAndAddresses, MemoryView, TAllocFunction } from './memory-address';
 
 export const VOXEL_MATERIAL_BYTES_PER_ELEMENT = 5;
-export const NO_MATERIAL_ADDRESS = 0xffffffff;
-
+export const NO_MATERIAL = 0xffffffff;
+export const NON_UNIFORM_MATERIAL = 0xfffffffd;
+export const UNDEFINED_MATERIAL = 0xfffffffc;
 
 /**
  * Represents a Material: it is used to represent how the light will react with a shape
@@ -21,7 +22,7 @@ export class VoxelMaterial extends MemoryView {
     reflection: number,
   ): VoxelMaterial {
     const voxelMaterial = new VoxelMaterial(memory, alloc(VOXEL_MATERIAL_BYTES_PER_ELEMENT));
-    CreateVoxelMaterial(voxelMaterial.memory, voxelMaterial.address, r, g, b, a, reflection);
+    WriteNewVoxelMaterial(voxelMaterial.memory, voxelMaterial.address, r, g, b, a, reflection);
     return voxelMaterial;
   }
 
@@ -33,59 +34,97 @@ export class VoxelMaterial extends MemoryView {
   }
 }
 
+/*-----------------*/
 
 /**
- * Creates a Voxel Material into memory
+ * Writes a new a <voxelMaterial> into 'memory'
  */
-export function CreateVoxelMaterial(
+export function WriteNewVoxelMaterial(
   memory: Uint8Array,
-  address: number,
+  voxelMaterialAddress: number,
   r: number,
   g: number,
   b: number,
   a: number,
   reflection: number,
 ): void {
-  memory[address] = r;
-  memory[address + 1] = g;
-  memory[address + 2] = b;
-  memory[address + 3] = a;
-  memory[address + 4] = reflection;
+  memory[voxelMaterialAddress] = r;
+  memory[voxelMaterialAddress + 1] = g;
+  memory[voxelMaterialAddress + 2] = b;
+  memory[voxelMaterialAddress + 3] = a;
+  memory[voxelMaterialAddress + 4] = reflection;
 }
 
-export function AreSameMaterialsAssumingMemoriesAndAddressesDifferent(
-  memory1: Uint8Array,
-  address1: number,
-  memory2: Uint8Array,
-  address2: number,
+
+export function IsInvisibleVoxelMaterial(
+  memory: Uint8Array,
+  voxelMaterialAddress: number,
+): boolean {
+  return memory[voxelMaterialAddress + 3] === 0;
+}
+
+
+
+export function AreIdenticalVoxelMaterialAddressesOnSameMemory(
+  memory: Uint8Array,
+  voxelMaterialAddressA: number,
+  voxelMaterialAddressB: number,
+): boolean {
+  return ((voxelMaterialAddressA === NO_MATERIAL) && (voxelMaterialAddressB === NO_MATERIAL)) // both are NO_MATERIAL
+    || AreIdenticalVoxelMaterialOnSameMemory(memory, voxelMaterialAddressA, voxelMaterialAddressB) // or both are equal
+}
+
+export function AreIdenticalVoxelMaterialOnSameMemory(
+  memory: Uint8Array,
+  voxelMaterialAddressA: number,
+  voxelMaterialAddressB: number,
 ): boolean {
   for (let i = 0; i < VOXEL_MATERIAL_BYTES_PER_ELEMENT; i++) {
-    if (memory1[address1 + i] !== memory2[address2 + i]) {
+    if (memory[voxelMaterialAddressA + i] !== memory[voxelMaterialAddressB + i]) {
       return false;
     }
   }
   return true;
 }
 
-export function AreSameMaterials(
-  memory1: Uint8Array,
-  address1: number,
-  memory2: Uint8Array,
-  address2: number,
-): boolean {
-  return AreSameMemoriesAndAddresses(memory1, address1, memory2, address2)
-    ? true
-    : AreSameMaterialsAssumingMemoriesAndAddressesDifferent(memory1, address1, memory2, address2);
-}
 
-export function CopyMaterial(
+
+// export function AreSameMaterialsAssumingMemoriesAndAddressesDifferent(
+//   memory1: Uint8Array,
+//   address1: number,
+//   memory2: Uint8Array,
+//   address2: number,
+// ): boolean {
+//   for (let i = 0; i < VOXEL_MATERIAL_BYTES_PER_ELEMENT; i++) {
+//     if (memory1[address1 + i] !== memory2[address2 + i]) {
+//       return false;
+//     }
+//   }
+//   return true;
+// }
+//
+// export function AreSameMaterials(
+//   memory1: Uint8Array,
+//   address1: number,
+//   memory2: Uint8Array,
+//   address2: number,
+// ): boolean {
+//   return AreSameMemoriesAndAddresses(memory1, address1, memory2, address2)
+//     ? true
+//     : AreSameMaterialsAssumingMemoriesAndAddressesDifferent(memory1, address1, memory2, address2);
+// }
+
+/**
+ * Fast copy of a <voxelMaterial> into another memory and address
+ */
+export function CopyVoxelMaterial(
   sourceMemory: Uint8Array,
-  sourceAddress: number,
+  sourceVoxelMaterialAddress: number,
   destinationMemory: Uint8Array,
-  destinationAddress: number,
+  destinationVoxelMaterialAddress: number,
 ): void {
   for (let i = 0; i < VOXEL_MATERIAL_BYTES_PER_ELEMENT; i++) {
-    destinationMemory[destinationAddress + i] = sourceMemory[sourceAddress + i];
+    destinationMemory[destinationVoxelMaterialAddress + i] = sourceMemory[sourceVoxelMaterialAddress + i];
   }
 }
 

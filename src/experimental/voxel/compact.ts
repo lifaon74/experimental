@@ -1,23 +1,19 @@
-import { ComputeVoxelOctreeMemorySize, VoxelOctree } from './octree';
 import {
-  AreSameMaterials,
-  AreSameMaterialsAssumingMemoriesAndAddressesDifferent,
-  NO_MATERIAL_ADDRESS,
-  VOXEL_MATERIAL_BYTES_PER_ELEMENT,
-  VoxelMaterial,
+  AreIdenticalVoxelOctreesOnSameMemory, CloneVoxelOctreesOnDifferentMemory, ConvertVoxelOctreeDepthToSide,
+  ReadVoxelMaterialAddressOfVoxelOctreeAtPosition,
+  VOXEL_OCTREE_BYTES_PER_ELEMENT, VoxelOctree, WriteVoxelOctreeMaterialAddress
+} from './octree';
+import {
+  AreIdenticalVoxelMaterialAddressesOnSameMemory, AreIdenticalVoxelMaterialOnSameMemory, IsInvisibleVoxelMaterial,
+  NO_MATERIAL, NON_UNIFORM_MATERIAL, UNDEFINED_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT,
 } from './material';
 import {
-  ADDRESS_BYTES_PER_ELEMENT,
-  CreateMemoryMap,
-  ReadAddress,
-  TAllocFunction,
-  WriteAddress,
+  ADDRESS_BYTES_PER_ELEMENT, ClearMemoryMap, NOT_MAPPED, ReadAddress, TAllocFunction, TMemoryMap, WriteAddress
 } from './memory-address';
-import { IsSubOctreeAddressIndexAVoxelOctreeAddress } from './sub-octree-adress-index';
-import { AbstractMemory } from './abstract-memory';
 import {
-  IncreaseVoxelOctreeDynamicAddresses,
-} from './octree-with-dynamic-address';
+  IsVoxelOctreeChildIndexAVoxelOctreeAddress, IsVoxelOctreeComposedOfMaterialsOnly,
+  SetVoxelOctreeChildAsVoxelMaterialUsingIndex,
+} from './octree-children';
 
 export interface CompactSizeOptions {
   compactTime?: number;
@@ -30,17 +26,6 @@ export interface VoxelOctreeOnSharedMemory {
   depth: number;
 }
 
-
-// export interface VoxelOctreesOnSharedMemory {
-//   sharedMemory: Uint8Array;
-//   octrees: VoxelOctreeOnSharedMemory[];
-// }
-
-/*--*/
-
-export interface VoxelOctreeWithDynamicAddressOnSharedMemory extends VoxelOctreeOnSharedMemory {
-
-}
 
 // export interface VoxelOctreesWithDynamicAddressOnSharedMemory extends VoxelOctreesOnSharedMemory {
 //   octrees: VoxelOctreeWithDynamicAddressOnSharedMemory[];
@@ -117,181 +102,603 @@ export function CopyVoxelOctreesOnSharedMemory(
 }
 
 
-export function MakeOctreesDynamic(
-  octrees: VoxelOctreeOnSharedMemory[],
-  sharedMemory: Uint8Array,
-  alloc: TAllocFunction,
-): VoxelOctreeWithDynamicAddressOnSharedMemory[] {
-  const memoryMap: Uint32Array = CreateMemoryMap(sharedMemory.length);
-  for (let i = 0, l = octrees.length; i < l; i++) {
-    const octree: VoxelOctreeOnSharedMemory = octrees[i];
-    IncreaseVoxelOctreeDynamicAddresses(sharedMemory, octree.address, alloc, octree.depth, memoryMap);
+// export function MakeOctreesDynamic(
+//   octrees: VoxelOctreeOnSharedMemory[],
+//   sharedMemory: Uint8Array,
+//   alloc: TAllocFunction,
+// ): VoxelOctreeWithDynamicAddressOnSharedMemory[] {
+//   const memoryMap: Uint32Array = CreateMemoryMap(sharedMemory.length);
+//   for (let i = 0, l = octrees.length; i < l; i++) {
+//     const octree: VoxelOctreeOnSharedMemory = octrees[i];
+//     IncreaseVoxelOctreeDynamicAddresses(sharedMemory, octree.address, alloc, memoryMap);
+//   }
+//   return octrees;
+// }
+
+/******* REMOVE TRANSPARENT VOXEL MATERIALS *******/
+
+export function RemoveTransparentVoxelMaterialsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+): void {
+  let voxelOctreeChildAddressAddress: number = voxelOctreeAddress + 1;
+  let voxelOctreeChildAddress: number;
+  for (let i = 0; i < 8; i++) {
+    voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+    if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, i)) {
+      RemoveTransparentVoxelMaterialsOfVoxelOctree(memory, voxelOctreeChildAddress);
+    } else if (
+      (voxelOctreeChildAddress !== NO_MATERIAL)
+      && IsInvisibleVoxelMaterial(memory, voxelOctreeChildAddress)
+    ) {
+      WriteAddress(memory, voxelOctreeChildAddressAddress, NO_MATERIAL);
+    }
+    voxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
   }
-  return octrees;
+}
+
+export function RemoveTransparentVoxelMaterialsOfVoxelOctrees(
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+): void {
+
+  for (let i = 0, l = octrees.length; i < l; i++) {
+    RemoveTransparentVoxelMaterialsOfVoxelOctree(memory, octrees[i].address);
+  }
 }
 
 
-/******* MATERIALS *******/
 
-// /**
-//  * Returns the list of all material addresses used by a VoxelOctree
-//  */
-// export function ListVoxelOctreeMaterialAddresses(
-//   memory: Uint8Array,
-//   address: number,
-//   materials: Set<number> = new Set<number>()
-// ): Set<number> {
-//   let subOctreeAddress: number = address + 1;
-//   let _address: number;
-//   for (let i = 0; i < 8; i++) { // for each sub-tree
-//     _address = ReadAddress(memory, subOctreeAddress);
-//     if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-//       ListVoxelOctreeMaterialAddresses(memory, _address, materials);
-//     } else if (_address !== NO_MATERIAL_ADDRESS) {
-//       materials.add(_address);
-//     }
-//     subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-//   }
-//   return materials;
-// }
-//
-// /**
-//  * Returns the list of all material addresses used by many Voxel Octrees
-//  */
-// export function ListMultipleVoxelOctreeMaterialAddresses(
-//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
-// ): Set<number> {
-//   const materials: Set<number> = new Set<number>()
-//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
-//     ListVoxelOctreeMaterialAddresses(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, materials)
-//   }
-//   return materials;
-// }
+/******* REMOVE DUPLICATE OR INVISIBLE VOXEL MATERIALS *******/
 
-/*
-New material address (never seen before):
-- compare with all previously seen materials:
-  - found duplicate => replace (in memory) with the correct address
-- store in 'seen materials' => [this address, patched address]
-Know material:
-  - replace (in memory) with the correct address
+export function RemoveDuplicateVoxelMaterialsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  uniqVoxelMaterialAddresses: Uint32Array, // list of all seen <voxelMaterialAddress> without any duplicates. [0] used to store the length
+  memoryMap: TMemoryMap,
+): void {
+  let voxelOctreeChildAddressAddress: number = voxelOctreeAddress + 1;
+  let voxelOctreeChildAddress: number;
+  for (let i = 0; i < 8; i++) {
+    voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+    if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, i)) {
+      RemoveDuplicateVoxelMaterialsOfVoxelOctree(memory, voxelOctreeChildAddress, uniqVoxelMaterialAddresses, memoryMap);
+    } else if (voxelOctreeChildAddress !== NO_MATERIAL) {
+      let mappedVoxelMaterialAddress: number = memoryMap[voxelOctreeChildAddress];
+      if (mappedVoxelMaterialAddress === NOT_MAPPED) { // first time we encounter this <voxelMaterial>
+        mappedVoxelMaterialAddress = voxelOctreeChildAddress;
+        const uniqVoxelMaterialAddressesLengthPlusOne: number = uniqVoxelMaterialAddresses[0] + 1;
+        // compare it with all already seen <voxelMaterial>s
+        for (let j = 1; j < uniqVoxelMaterialAddressesLengthPlusOne; j++) {
+          // console.log('comparing', _address, uniqMaterials[j]);
+          // if this <voxelMaterial> is the same as one present in uniqVoxelMaterialAddresses, replace current <voxelOctreeChildAddress> by uniqVoxelMaterialAddresses[j]
+          if (AreIdenticalVoxelMaterialOnSameMemory(memory, voxelOctreeChildAddress, uniqVoxelMaterialAddresses[j])) {
+            mappedVoxelMaterialAddress = uniqVoxelMaterialAddresses[j];
+            WriteAddress(memory, voxelOctreeChildAddressAddress, mappedVoxelMaterialAddress);
+            // console.log('duplicate detected', _address, ' -> ', mappedAddress);
+            break;
+          }
+        }
+        if (mappedVoxelMaterialAddress === voxelOctreeChildAddress) { // no duplicate
+          // console.log('set uniq', _address);
+          uniqVoxelMaterialAddresses[0] = uniqVoxelMaterialAddressesLengthPlusOne;
+          uniqVoxelMaterialAddresses[uniqVoxelMaterialAddressesLengthPlusOne] = voxelOctreeChildAddress;
+        }
+        memoryMap[voxelOctreeChildAddress] = mappedVoxelMaterialAddress;
+      } else {
+        WriteAddress(memory, voxelOctreeChildAddressAddress, mappedVoxelMaterialAddress);
+      }
+    }
+    voxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+  }
+}
+
+export function RemoveDuplicateVoxelMaterialsOfVoxelOctrees(
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+  memoryMap: TMemoryMap
+): void {
+  const uniqVoxelMaterialAddresses: Uint32Array = new Uint32Array(memory.length / VOXEL_MATERIAL_BYTES_PER_ELEMENT); // TODO may be optimized
+
+  for (let i = 0, l = octrees.length; i < l; i++) {
+    RemoveDuplicateVoxelMaterialsOfVoxelOctree(memory, octrees[i].address, uniqVoxelMaterialAddresses, memoryMap);
+  }
+}
+
+
+/******* REMOVE UNIFORM CHILD VOXEL OCTREES *******/
+
+export function RemoveUniformChildVoxelOctreesOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+): number {
+  let voxelOctreeChildAddressAddress: number = voxelOctreeAddress + 1;
+  let voxelOctreeChildAddress: number = 0;
+  let commonVoxelMaterialAddress: number = UNDEFINED_MATERIAL;
+
+  for (let i = 0; i < 8; i++) { // for each sub-tree
+    voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+    if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, i)) {
+      voxelOctreeChildAddress = RemoveUniformChildVoxelOctreesOfVoxelOctree(memory, voxelOctreeChildAddress);
+
+      if (commonVoxelMaterialAddress === UNDEFINED_MATERIAL) {
+        commonVoxelMaterialAddress = voxelOctreeChildAddress;
+      } else if (
+        (commonVoxelMaterialAddress !== NON_UNIFORM_MATERIAL)
+        && (
+          (voxelOctreeChildAddress === NON_UNIFORM_MATERIAL)
+          || !AreIdenticalVoxelMaterialAddressesOnSameMemory(memory, commonVoxelMaterialAddress, voxelOctreeChildAddress)
+        )
+      ) {
+        commonVoxelMaterialAddress = NON_UNIFORM_MATERIAL;
+      }
+
+      if (voxelOctreeChildAddress !== NON_UNIFORM_MATERIAL) {
+        SetVoxelOctreeChildAsVoxelMaterialUsingIndex(memory, voxelOctreeAddress, i);
+        WriteAddress(memory, voxelOctreeChildAddressAddress, voxelOctreeChildAddress);
+      }
+    } else {
+      if (commonVoxelMaterialAddress === UNDEFINED_MATERIAL) {
+        commonVoxelMaterialAddress = voxelOctreeChildAddress;
+      } else if (
+        (commonVoxelMaterialAddress !== NON_UNIFORM_MATERIAL)
+        && !AreIdenticalVoxelMaterialAddressesOnSameMemory(memory, commonVoxelMaterialAddress, voxelOctreeChildAddress)
+      ) {
+        commonVoxelMaterialAddress = NON_UNIFORM_MATERIAL;
+      }
+    }
+    voxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+  }
+  return commonVoxelMaterialAddress;
+}
+
+
+export function RemoveUniformChildVoxelOctreesOfVoxelOctrees(
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+): void {
+  for (let i = 0, l = octrees.length; i < l; i++) {
+    RemoveUniformChildVoxelOctreesOfVoxelOctree(memory, octrees[i].address);
+  }
+}
+
+
+/******* REMOVE DUPLICATE VOXEL OCTREES *******/
+
+
+function DeduplicateVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  uniqVoxelOctreeAddresses: Uint32Array,
+): number {
+  let newAddress: number = voxelOctreeAddress;
+
+  const uniqVoxelOctreeAddressesLengthPlusOne: number = uniqVoxelOctreeAddresses[0] + 1;
+
+  // compare it with all already seen <voxelOctree>s
+  for (let j = 1; j < uniqVoxelOctreeAddressesLengthPlusOne; j++) {
+    if (AreIdenticalVoxelOctreesOnSameMemory(memory, voxelOctreeAddress, uniqVoxelOctreeAddresses[j])) {
+      newAddress = uniqVoxelOctreeAddresses[j];
+      break;
+    }
+  }
+
+  if (newAddress === voxelOctreeAddress) { // no duplicate
+    uniqVoxelOctreeAddresses[0] = uniqVoxelOctreeAddressesLengthPlusOne;
+    uniqVoxelOctreeAddresses[uniqVoxelOctreeAddressesLengthPlusOne] = voxelOctreeAddress;
+  }
+
+  return newAddress;
+}
+
+// TODO apply same logic for materials ?
+export function RemoveDuplicateVoxelOctreesOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  uniqMaterialsOnlyVoxelOctreeAddresses: Uint32Array, // list of all seen <voxelOctreeAddress> having only materials without any duplicates. [0] used to store the length
+  uniqOtherVoxelOctreeAddresses: Uint32Array, // list of all other <voxelOctreeAddress> having only materials without any duplicates. [0] used to store the length
+  memoryMap: TMemoryMap,
+): number {
+  let newVoxelOctreeAddress: number = memoryMap[voxelOctreeAddress];
+
+  if (newVoxelOctreeAddress === NOT_MAPPED) { // first time we encounter this <voxelOctreeAddress>
+    if (IsVoxelOctreeComposedOfMaterialsOnly(memory, voxelOctreeAddress)) {
+      newVoxelOctreeAddress = DeduplicateVoxelOctree(memory, voxelOctreeAddress, uniqMaterialsOnlyVoxelOctreeAddresses);
+    } else {
+      let voxelOctreeChildAddressAddress: number = voxelOctreeAddress + 1;
+      let voxelOctreeChildAddress: number;
+      for (let i = 0; i < 8; i++) {
+        voxelOctreeChildAddress = ReadAddress(memory, voxelOctreeChildAddressAddress);
+        if (IsVoxelOctreeChildIndexAVoxelOctreeAddress(memory, voxelOctreeAddress, i)) {
+          WriteAddress(
+            memory,
+            voxelOctreeChildAddressAddress,
+            RemoveDuplicateVoxelOctreesOfVoxelOctree(
+              memory,
+              voxelOctreeChildAddress,
+              uniqMaterialsOnlyVoxelOctreeAddresses,
+              uniqOtherVoxelOctreeAddresses,
+              memoryMap
+            )
+          );
+          voxelOctreeChildAddressAddress += ADDRESS_BYTES_PER_ELEMENT;
+        }
+
+        newVoxelOctreeAddress = DeduplicateVoxelOctree(memory, voxelOctreeAddress, uniqOtherVoxelOctreeAddresses);
+      }
+    }
+    memoryMap[voxelOctreeAddress] = newVoxelOctreeAddress;
+  }
+  return newVoxelOctreeAddress;
+}
+
+
+export function RemoveDuplicateVoxelOctreesOfVoxelOctrees(
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+  memoryMap: TMemoryMap
+): void {
+  const uniqMaterialsOnlyVoxelOctreeAddresses: Uint32Array = new Uint32Array(memory.length / VOXEL_OCTREE_BYTES_PER_ELEMENT); // TODO may be optimized
+  const uniqOtherVoxelOctreeAddresses: Uint32Array = new Uint32Array(memory.length / VOXEL_OCTREE_BYTES_PER_ELEMENT); // TODO may be optimized
+
+  for (let i = 0, l = octrees.length; i < l; i++) {
+    octrees[i].address = RemoveDuplicateVoxelOctreesOfVoxelOctree(
+      memory,
+      octrees[i].address,
+      uniqMaterialsOnlyVoxelOctreeAddresses,
+      uniqOtherVoxelOctreeAddresses,
+      memoryMap
+    );
+  }
+}
+
+
+/******* REMOVE UNREACHABLE VOXELS *******/
+
+
+
+export function GetUnreachableVoxelsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
+  exploredVoxels: Uint8Array
+): void {
+  const side: number = ConvertVoxelOctreeDepthToSide(voxelOctreeDepth);
+  const sideP2: number = side * side; // side power 2
+  const sideMinusOne: number = side - 1;
+
+  const voxelsToExploreMaxSize: number = sideP2 * 6;
+  let voxelsToExploreX: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let voxelsToExploreY: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let voxelsToExploreZ: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let voxelsToExploreSize: number = 0;
+  let nextVoxelsToExploreX: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let nextVoxelsToExploreY: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let nextVoxelsToExploreZ: Uint16Array = new Uint16Array(voxelsToExploreMaxSize);
+  let nextVoxelsToExploreSize: number = 0;
+
+  // let reached: number = 0;
+
+  const writeIfReachable = (x: number, y: number, z: number) => {
+    const i: number = x + y * side + z * sideP2;
+    if (
+      (exploredVoxels[i] === 0)
+      && (
+        ReadVoxelMaterialAddressOfVoxelOctreeAtPosition(
+          memory,
+          voxelOctreeAddress,
+          voxelOctreeDepth,
+          x,
+          y,
+          z
+        ) === NO_MATERIAL
+      )
+    ) {
+      // reached++;
+      exploredVoxels[i] = 1;
+      nextVoxelsToExploreX[nextVoxelsToExploreSize] = x;
+      nextVoxelsToExploreY[nextVoxelsToExploreSize] = y;
+      nextVoxelsToExploreZ[nextVoxelsToExploreSize] = z;
+      nextVoxelsToExploreSize++;
+    }
+  }
+
+  const writeIfReachableAndInCube = (x: number, y: number, z: number) => {
+    if (
+      ((0 <= x) && (x < side))
+      && ((0 <= y) && (y < side))
+      && ((0 <= z) && (z < side))
+    ) {
+      writeIfReachable(x, y, z);
+    }
+  }
+
+  // 8^3 - 6^3= 296
+
+  // mark external faces as <nextVoxelsToExplore>
+  for (let x: number = 0; x < side; x++) {
+    for (let y: number = 0; y < side; y++) {
+      writeIfReachable(x, y, 0);
+      writeIfReachable(x, y, sideMinusOne);
+      writeIfReachable(x, 0, y);
+      writeIfReachable(x, sideMinusOne, y);
+      writeIfReachable(0, x, y);
+      writeIfReachable(sideMinusOne, x, y);
+    }
+  }
+
+  // console.log('black reached', reached);
+
+  while (nextVoxelsToExploreSize > 0) {
+    // swap <nextVoxelsToExplore> with <voxelsToExplore>
+    [voxelsToExploreX, nextVoxelsToExploreX] = [nextVoxelsToExploreX, voxelsToExploreX];
+    [voxelsToExploreY, nextVoxelsToExploreY] = [nextVoxelsToExploreY, voxelsToExploreY];
+    [voxelsToExploreZ, nextVoxelsToExploreZ] = [nextVoxelsToExploreZ, voxelsToExploreZ];
+    voxelsToExploreSize = nextVoxelsToExploreSize;
+    nextVoxelsToExploreSize = 0;
+    for (let i = 0; i < voxelsToExploreSize; i++) {
+      const x: number = voxelsToExploreX[i];
+      const y: number = voxelsToExploreY[i];
+      const z: number = voxelsToExploreZ[i];
+
+      writeIfReachableAndInCube(x - 1, y, z);
+      writeIfReachableAndInCube(x + 1, y, z);
+      writeIfReachableAndInCube(x, y - 1, z);
+      writeIfReachableAndInCube(x, y + 1, z);
+      writeIfReachableAndInCube(x, y, z - 1);
+      writeIfReachableAndInCube(x, y, z + 1);
+    }
+  }
+
+  // console.log('black reached', reached);
+}
+
+
+export function GetUnreachableEdgeVoxelsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
+  exploredVoxels: Uint8Array
+): void {
+  const side: number = ConvertVoxelOctreeDepthToSide(voxelOctreeDepth);
+  const sideP2: number = side * side; // side power 2
+
+  const isEdge = (x: number, y: number, z: number) => {
+    return (
+      ((0 <= x) && (x < side))
+      && ((0 <= y) && (y < side))
+      && ((0 <= z) && (z < side))
+      && (exploredVoxels[x + y * side + z * sideP2] === 1)
+    );
+  }
+
+  let i: number = 0;
+  for (let z: number = 0; z < side; z++) {
+    for (let y: number = 0; y < side; y++) {
+      for (let x: number = 0; x < side; x++) {
+        if (exploredVoxels[i /*x + y * side + z * sideP2*/] === 0) {
+          for (let _x: number = -1; _x <= 1; _x++) {
+            for (let _y: number = -1; _y <= 1; _y++) {
+              for (let _z: number = -1; _z <= 1; _z++) {
+                if (
+                  (
+                    (_x !== 0)
+                    || (_y !== 0)
+                    || (_z !== 0)
+                  )
+                  && isEdge(x + _x, y + _y, z + _z)
+                ) {
+                  exploredVoxels[i] = 2;
+                }
+              }
+            }
+          }
+          // markAsGrey(x, y - 1, z - 1);
+          // markAsGrey(x, y + 1, z - 1);
+          // markAsGrey(x, y - 1, z + 1);
+          // markAsGrey(x, y + 1, z + 1);
+          //
+          // markAsGrey(x - 1, y, z - 1);
+          // markAsGrey(x + 1, y, z - 1);
+          // markAsGrey(x - 1, y, z + 1);
+          // markAsGrey(x + 1, y, z + 1);
+          //
+          // markAsGrey(x - 1, y - 1, z);
+          // markAsGrey(x + 1, y - 1, z);
+          // markAsGrey(x - 1, y + 1, z);
+          // markAsGrey(x + 1, y + 1, z);
+          //
+          // markAsGrey(x - 1, y - 1, z - 1);
+          // markAsGrey(x + 1, y - 1, z - 1);
+          // markAsGrey(x - 1, y + 1, z - 1);
+          // markAsGrey(x + 1, y + 1, z - 1);
+          //
+          // markAsGrey(x - 1, y - 1, z + 1);
+          // markAsGrey(x + 1, y - 1, z + 1);
+          // markAsGrey(x - 1, y + 1, z + 1);
+          // markAsGrey(x + 1, y + 1, z + 1);
+        }
+        i++;
+      }
+    }
+  }
+}
+
+
+export function ReplaceUnreachableEdgeVoxelsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
+  exploredVoxels: Uint8Array,
+  alloc: TAllocFunction,
+  voxelMaterialAddress: number,
+): number {
+  const side: number = ConvertVoxelOctreeDepthToSide(voxelOctreeDepth);
+
+  let i: number = 0;
+  let replaced: number = 0;
+  for (let z: number = 0; z < side; z++) {
+    for (let y: number = 0; y < side; y++) {
+      for (let x: number = 0; x < side; x++) {
+        if (exploredVoxels[i /*x + y * side + z * sideP2*/] === 0) {
+          replaced++;
+          // console.log('replace', x, y, z);
+          WriteVoxelOctreeMaterialAddress(
+            memory,
+            voxelOctreeAddress,
+            alloc,
+            voxelOctreeDepth,
+            x,
+            y,
+            z,
+            voxelMaterialAddress,
+          );
+        }
+        i++;
+      }
+    }
+  }
+
+  return replaced;
+}
+
+
+/**
+ * WARN: USE WITH CARE ! this function won't always resolve in a smaller or better <voxelOctree>
+ *   -> for example:
+ *    - if the <voxelOctree> is already uniform
+ *    - if the children of the <voxelOctree> are shared or re-used
  */
+export function RemoveUnreachableVoxelsOfVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  alloc: TAllocFunction,
+  voxelOctreeDepth: number,
+  voxelMaterialAddress: number = NO_MATERIAL
+): number {
+  const side: number = ConvertVoxelOctreeDepthToSide(voxelOctreeDepth);
+  const exploredVoxels: Uint8Array = new Uint8Array(side * side * side);
 
-// export function RemoveDuplicateMaterialsFromOctree(
-//   memory: Uint8Array,
-//   address: number,
-//   uniqMaterials: Uint8Array, // list all materials without any duplicates. [0] used to store the length of uniqMaterials
-//   processedMaterials: Map<number, number>, // [processed address, patched address]
-// ): void {
-//   let subOctreeAddress: number = address + 1;
-//   let _address: number;
-//   for (let i = 0; i < 8; i++) { // for each sub-tree
-//     _address = ReadAddress(memory, subOctreeAddress);
-//     if (IsSubOctreeAddressIndexAVoxelOctreeAddress(memory, address, i)) {
-//       RemoveDuplicateMaterialsFromOctree(memory, _address, uniqMaterials, processedMaterials);
-//     } else if (_address !== NO_MATERIAL_ADDRESS) {
-//       let patchedAddress: number | undefined = processedMaterials.get(_address);
-//       if (patchedAddress === void 0) {
-//         patchedAddress = _address;
-//         const uniqMaterialsLengthPlusOne: number = uniqMaterials[0] + 1;
-//         for (let j = 1; j < uniqMaterialsLengthPlusOne; j++) {
-//           // console.log('comparing', _address, uniqMaterials[j]);
-//           if (AreSameMaterialsAssumingMemoriesAndAddressesDifferent(memory, _address, memory, uniqMaterials[j])) {
-//             patchedAddress = uniqMaterials[j];
-//             WriteAddress(memory, subOctreeAddress, patchedAddress);
-//             // console.log('duplicate detected', _address, ' -> ', patchedAddress);
-//             break;
-//           }
-//         }
-//         if (patchedAddress === _address) { // no duplicate
-//           // console.log('set uniq', _address);
-//           uniqMaterials[0]++;
-//           uniqMaterials[uniqMaterialsLengthPlusOne] = _address;
-//         }
-//         processedMaterials.set(_address, patchedAddress);
-//       } else {
-//         if (_address !== patchedAddress) {
-//           // console.log('duplicate patched');
-//           WriteAddress(memory, subOctreeAddress, patchedAddress);
-//         }
-//       }
-//     }
-//     subOctreeAddress += ADDRESS_BYTES_PER_ELEMENT;
-//   }
-// }
-//
-// export function RemoveDuplicateMaterials(
-//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
-// ): void {
-//   const uniqMaterials: Uint8Array = new Uint8Array(octreesOnSameMemory.memory.length / VOXEL_MATERIAL_BYTES_PER_ELEMENT);
-//   const processedMaterials: Map<number, number> = new Map<number, number>();
-//
-//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
-//     RemoveDuplicateMaterialsFromOctree(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, uniqMaterials, processedMaterials);
-//   }
-// }
+  GetUnreachableVoxelsOfVoxelOctree(
+    memory,
+    voxelOctreeAddress,
+    voxelOctreeDepth,
+    exploredVoxels,
+  );
 
-// export function RebuildOctrees(
-//   octreesOnSameMemory: VoxelOctreesOnSharedMemory
-// ): AbstractMemory {
-//   const memory: AbstractMemory = new AbstractMemory(octreesOnSameMemory.memory.length);
-//   const memoryView: Uint8Array = memory.toUint8Array();
-//   const alloc: TAllocFunction = memory.toAllocFunction();
-//
-//   for (let i = 0, l = octreesOnSameMemory.octrees.length; i < l; i++) {
-//     DeepCopyVoxelOctree(octreesOnSameMemory.memory, octreesOnSameMemory.octrees[i].address, memoryView, alloc);
-//   }
-//
-//   return memory;
-// }
+  GetUnreachableEdgeVoxelsOfVoxelOctree(
+    memory,
+    voxelOctreeAddress,
+    voxelOctreeDepth,
+    exploredVoxels,
+  );
+
+  return ReplaceUnreachableEdgeVoxelsOfVoxelOctree(
+    memory,
+    voxelOctreeAddress,
+    voxelOctreeDepth,
+    exploredVoxels,
+    alloc,
+    voxelMaterialAddress,
+  );
+}
 
 
+/******* COMPACT VOXEL OCTREES *******/
 
 
 export function CompactVoxelOctrees(
-  octrees: VoxelOctree[],
-  options: CompactSizeOptions = {},
-): any {  // TODO type
-  if (options.originalSize === void 0) {
-    const sharedMemory: AbstractMemory = new AbstractMemory(2 ** 24); // TODO
-    const sharedMemoryView: Uint8Array = sharedMemory.toUint8Array();
-    const alloc: TAllocFunction = sharedMemory.toAllocFunction();
-
-    const octreesOnSharedMemory: VoxelOctreeOnSharedMemory[] = CopyVoxelOctreesOnSharedMemory(octrees, sharedMemoryView, alloc);
-    const octreesWithDynamicAddressOnSharedMemory: VoxelOctreeWithDynamicAddressOnSharedMemory[] = MakeOctreesDynamic(octreesOnSharedMemory, sharedMemoryView, alloc);
-    console.log(octreesWithDynamicAddressOnSharedMemory);
-
-
-    // TODO continue here:
-    // 1 - compact octrees using dynamic addresses
-    // 2 - remove dynamic addresses from compacted octree (decrease dyn addr)
-    // 3 - regenerate octree, in the smallest possible memory
-
-    // RemoveDuplicateMaterials(octreesWithDynamicAddressOnSharedMemory);
-
-
-    // const memory = RebuildOctrees(octreesOnSameMemory);
-    //
-    // memory.log('compacted');
-
-    throw 'TODO1';
-  } else {
-    const size_before: number = options.originalSize;
-    const _options: CompactSizeOptions = Object.assign({}, options, { originalSize: void 0 });
-    const t1: number = Date.now();
-    const compactedOctrees: any = CompactVoxelOctrees(octrees, _options); // TODO type
-    const t2: number = Date.now();
-    const size_after: number = compactedOctrees.memory.length;
-    const size_text3d: number = ((0x1 << (octrees[0].depth + 1)) ** 3) * VOXEL_MATERIAL_BYTES_PER_ELEMENT;
-
-    console.log(
-      `compact performance: ${ size_before } -> ${ size_after } (${ Math.round(size_after / size_before * 100) }%) in ${ t2 - t1 }ms`
-      + `\n(text3d: ${ size_text3d } (${ Math.round(size_after / size_text3d * 100) }%))`
-    );
-
-    return compactedOctrees;
-  }
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+  memoryMap: TMemoryMap = new Uint32Array(memory.length),
+): void {
+  RemoveTransparentVoxelMaterialsOfVoxelOctrees(memory, octrees);
+  RemoveDuplicateVoxelMaterialsOfVoxelOctrees(memory, octrees, ClearMemoryMap(memoryMap));
+  RemoveUniformChildVoxelOctreesOfVoxelOctrees(memory, octrees);
+  RemoveDuplicateVoxelOctreesOfVoxelOctrees(memory, octrees, ClearMemoryMap(memoryMap));
 }
+
+export function CompactVoxelOctreesOnNewMemory(
+  memory: Uint8Array,
+  octrees: VoxelOctreeOnSharedMemory[],
+  newMemory: Uint8Array,
+  newMemoryAlloc: TAllocFunction,
+): VoxelOctreeOnSharedMemory[] {
+  const memoryMap: TMemoryMap = new Uint32Array(memory.length);
+  CompactVoxelOctrees(memory, octrees, memoryMap);
+  return CloneVoxelOctreesOnDifferentMemory(
+    memory,
+    octrees,
+    newMemory,
+    newMemoryAlloc,
+    ClearMemoryMap(memoryMap),
+  );
+}
+
+/* NON DESTRUCTIVE */
+
+
+
+// export function CompactVoxelOctreesOnDifferentMemories(
+//   octrees: VoxelOctree[],
+//   options: CompactSizeOptions = {},
+// ): any {  // TODO type
+//   if (options.originalSize === void 0) {
+//     const sharedMemory: AbstractMemory = new AbstractMemory(2 ** 30); // TODO
+//     const sharedMemoryView: Uint8Array = sharedMemory.toUint8Array();
+//     const sharedMemoryAlloc: TAllocFunction = sharedMemory.toAllocFunction();
+//
+//     const octreesOnSharedMemory: VoxelOctreeOnSharedMemory[] = CopyVoxelOctreesOnSharedMemory(octrees, sharedMemoryView, sharedMemoryAlloc);
+//     // console.log(octreesOnSharedMemory);
+//
+//     const memoryMap: TMemoryMap = new Uint32Array(sharedMemoryAlloc(0));
+//
+//     RemoveDuplicateVoxelMaterialsOfVoxelOctrees(sharedMemoryView, octreesOnSharedMemory, ClearMemoryMap(memoryMap));
+//     RemoveUniformChildVoxelOctreesOfVoxelOctrees(sharedMemoryView, octreesOnSharedMemory);
+//     RemoveDuplicateVoxelOctreesOfVoxelOctrees(sharedMemoryView, octreesOnSharedMemory, ClearMemoryMap(memoryMap));
+//
+//     // TODO continue here:
+//     // 1 - compact octrees using dynamic addresses
+//     // 2 - remove dynamic addresses from compacted octree (decrease dyn addr)
+//     // 3 - regenerate octree, in the smallest possible memory
+//
+//     const NEW_MEMORY = new AbstractMemory(2 ** 16);
+//     const NEW_MEMORY_VIEW = NEW_MEMORY.toUint8Array();
+//     const newMemoryAlloc = NEW_MEMORY.toAllocFunction();
+//
+//     const _octrees = CloneVoxelOctreesOnDifferentMemory(
+//       sharedMemoryView,
+//       octreesOnSharedMemory,
+//       NEW_MEMORY_VIEW,
+//       newMemoryAlloc,
+//       ClearMemoryMap(memoryMap),
+//     );
+//
+//     console.log(_octrees);
+//
+//     NEW_MEMORY.log('copied');
+//
+//     return {
+//       memory: NEW_MEMORY.toSmallestUint8Array(),
+//       octrees: _octrees
+//     }
+//   } else {
+//     const size_before: number = options.originalSize;
+//     const _options: CompactSizeOptions = Object.assign({}, options, { originalSize: void 0 });
+//     const t1: number = Date.now();
+//     const compactedOctrees: any = CompactVoxelOctrees(octrees, _options); // TODO type
+//     const t2: number = Date.now();
+//     const size_after: number = compactedOctrees.memory.length;
+//     const size_text3d: number = GetMaximumAmountOfMemoryUsedByTheVoxelMaterialsOfAVoxelOctreeFromDepth(octrees[0].depth + 1);
+//
+//     console.log(
+//       `compact performance: ${ size_before } -> ${ size_after } (${ Math.round(size_after / size_before * 100) }%) in ${ t2 - t1 }ms`
+//       + `\n(text3d: ${ size_text3d } (${ Math.round(size_after / size_text3d * 100) }%))`
+//     );
+//
+//     return compactedOctrees;
+//   }
+// }
 
 
 

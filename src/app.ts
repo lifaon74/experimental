@@ -2,7 +2,7 @@ import { testUnit } from './experimental/units/unit';
 import { debugPCB } from './experimental/pcb/debug';
 import { debugBigInt } from './experimental/bigint/debug';
 import { debugUnitV2 } from './experimental/units_v2/debug';
-import { debugVoxel } from './experimental/voxel/experiment-voxel';
+import { debugVoxel } from './experimental/voxel/debug-voxel';
 
 export async function run() {
   await debugVoxel();

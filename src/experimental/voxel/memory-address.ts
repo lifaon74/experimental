@@ -67,6 +67,13 @@ export function ReadAddress(
   ) >>> 0;
 }
 
+export function ReadDepth1DynamicAddress(
+  memory: Uint8Array,
+  address: number,
+): number {
+  return ReadAddress(memory, ReadAddress(memory, address));
+}
+
 /**
  * Reads a dynamic address from the memory
  */
@@ -124,12 +131,21 @@ export function AreSameMemoriesAndAddresses(
     && (address1 === address2);
 }
 
+/*----*/
+
+export type TMemoryMap = Uint32Array;
 
 export const NOT_MAPPED: number = 0xffffffff;
 
 export function CreateMemoryMap(
   size: number = 2 ** 31
-): Uint32Array {
-  return new Uint32Array(size).fill(NOT_MAPPED);
+): TMemoryMap {
+  return ClearMemoryMap(new Uint32Array(size));
 }
 
+
+export function ClearMemoryMap(
+  memoryMap: TMemoryMap
+): TMemoryMap {
+  return memoryMap.fill(NOT_MAPPED);
+}
