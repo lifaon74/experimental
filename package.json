@@ -76,8 +76,10 @@
     "google-closure-compiler-js": "20170218.0.0"
   },
   "devDependencies": {
+    "@types/css-tree": "^1.0.4",
     "@types/jszip": "^3.1.7",
     "@types/node": "latest",
+    "@types/stylis": "^4.0.0",
     "browser-sync": "^2.26.7",
     "http-server": "^0.12.1",
     "markdown-toc": "^1.2.0",
@@ -100,7 +102,10 @@
   "dependencies": {
     "@lifaon/class-factory": "^1.1.1",
     "@lifaon/path": "^1.1.2",
+    "css-tree": "^1.1.2",
     "gl-matrix": "^3.2.1",
-    "jszip": "^3.2.2"
+    "jszip": "^3.2.2",
+    "parsel-js": "^1.0.1",
+    "stylis": "^4.0.6"
   }
 }
