@@ -1,10 +1,5 @@
 import {
-  ADDRESS_BYTES_PER_ELEMENT,
-  NOT_MAPPED,
-  ReadAddress,
-  ReadDepth1DynamicAddress,
-  TAllocFunction,
-  WriteAddress,
+  ADDRESS_BYTES_PER_ELEMENT, NOT_MAPPED, readAddress, readDepth1DynamicAddress, IAllocFunction, writeAddress,
 } from '../memory-address';
 import { IsVoxelOctreeChildAddressIndexAVoxelOctreeAddress } from '../octree-children';
 import { VoxelOctree } from '../octree';
@@ -59,20 +54,20 @@ export class VoxelOctreeWithDynamicAddress extends VoxelOctree {
 export function IncreaseVoxelOctreeDynamicAddresses(
   memory: Uint8Array,
   address: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
   memoryMap: Uint32Array, // map from an address to another, used to convert old addresses to new ones
 ): void {
   let subOctreeAddress: number = address + 1;
   let _address: number;
   for (let i = 0; i < 8; i++) { // for each sub-tree
-    _address = ReadAddress(memory, subOctreeAddress);
+    _address = readAddress(memory, subOctreeAddress);
     let mappedAddress: number = memoryMap[_address];
     if (mappedAddress === NOT_MAPPED) {
       mappedAddress = alloc(ADDRESS_BYTES_PER_ELEMENT);
-      WriteAddress(memory, mappedAddress, _address);
+      writeAddress(memory, mappedAddress, _address);
       memoryMap[_address] = mappedAddress;
     }
-    WriteAddress(memory, subOctreeAddress, mappedAddress);
+    writeAddress(memory, subOctreeAddress, mappedAddress);
 
     if (IsVoxelOctreeChildAddressIndexAVoxelOctreeAddress(memory, address, i)) {
       IncreaseVoxelOctreeDynamicAddresses(memory, _address, alloc, memoryMap);
@@ -85,13 +80,13 @@ export function IncreaseVoxelOctreeDynamicAddresses(
 export function DecreaseVoxelOctreeDynamicAddresses(
   memory: Uint8Array,
   address: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
 ): void {
   let subOctreeAddress: number = address + 1;
   let _address: number;
   for (let i = 0; i < 8; i++) { // for each sub-tree
-    _address = ReadDepth1DynamicAddress(memory, subOctreeAddress);
-    WriteAddress(memory, subOctreeAddress, _address);
+    _address = readDepth1DynamicAddress(memory, subOctreeAddress);
+    writeAddress(memory, subOctreeAddress, _address);
 
     if (IsVoxelOctreeChildAddressIndexAVoxelOctreeAddress(memory, address, i)) {
       DecreaseVoxelOctreeDynamicAddresses(memory, _address, alloc);

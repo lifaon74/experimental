@@ -1,7 +1,12 @@
-import { vec2, vec3 } from 'gl-matrix';
+import { vec3 } from 'gl-matrix';
 
 
-export function hitCubeIn(
+/**
+ * Returns the position of a ray hitting a cube (first surface to hit => enter the cube)
+ * INFO: The ray must enter the cube to be valid
+ * INFO: if the ray doesn't hit the cube, hitPosition[0] = NaN; @see isValidHitPoint
+ */
+export function nextHitCubeIn(
   rayPosition: vec3,
   rayVector: vec3,
   side: number,
@@ -15,27 +20,31 @@ export function hitCubeIn(
 
     if (rayVector[a] !== 0) {
       if (rayVector[a] > 0) {
-        if (rayPosition[a] >= side) { // point over
+        if (rayPosition[a] >= side) { // point after exit surface
           break;
         } else {
-          hitPosition[a] = (rayPosition[a] > 0) ? rayPosition[a] : 0;
+          hitPosition[a] = (rayPosition[a] > 0)
+            ? rayPosition[a] // in the cube
+            : 0;
         }
-      } else if (rayVector[a] < 0) {
-        if (rayPosition[a] < 0) { // point under
+      } else { // if (rayVector[a] < 0)
+        if (rayPosition[a] <= 0) { // point after exit surface
           break;
         } else {
-          hitPosition[a] = (rayPosition[a] < side) ? rayPosition[a] : side;
+          hitPosition[a] = (rayPosition[a] < side)
+            ? rayPosition[a] // in the cube
+            : side;
         }
       }
 
-      hitPosition[b] = rayPosition[b] - (rayPosition[a] - hitPosition[a]) * rayVector[b] / rayVector[a];
+      hitPosition[b] = rayPosition[b] - (((rayPosition[a] - hitPosition[a]) * rayVector[b]) / rayVector[a]); // thales
       if (
-        ((hitPosition[b] > 0) || ((hitPosition[b] === 0) && (rayVector[b] >= 0))) // out[b] inside or next step inside
+        ((hitPosition[b] > 0) || ((hitPosition[b] === 0) && (rayVector[b] >= 0))) // hitPosition[b] inside or next step inside
         && ((hitPosition[b] < side) || ((hitPosition[b] === side) && (rayVector[b] < 0)))
       ) {
-        hitPosition[c] = rayPosition[c] - (rayPosition[a] - hitPosition[a]) * rayVector[c] / rayVector[a];
+        hitPosition[c] = rayPosition[c] - (((rayPosition[a] - hitPosition[a]) * rayVector[c]) / rayVector[a]);  // thales
         if (
-          ((hitPosition[c] > 0) || ((hitPosition[c] === 0) && (rayVector[c] >= 0))) // out[c] inside or next step inside
+          ((hitPosition[c] > 0) || ((hitPosition[c] === 0) && (rayVector[c] >= 0))) // hitPosition[c] inside or next step inside
           && ((hitPosition[c] < side) || ((hitPosition[c] === side) && (rayVector[c] < 0)))
         ) {
           return hitPosition;
@@ -47,8 +56,6 @@ export function hitCubeIn(
   hitPosition[0] = Number.NaN;
   return hitPosition;
 }
-
-
 
 
 /*---- TESTS ----*/

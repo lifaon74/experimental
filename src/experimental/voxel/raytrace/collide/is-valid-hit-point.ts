@@ -1,5 +1,4 @@
-import { vec3 } from "gl-matrix";
-
+import { vec3 } from 'gl-matrix';
 
 
 export function isValidHitPoint(

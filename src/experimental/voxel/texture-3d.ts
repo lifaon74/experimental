@@ -1,5 +1,4 @@
-import { MemoryView, ReadAddress, WriteAddress } from './memory-address';
-import { Convert3DPositionToVoxelOctreeChildIndex } from './octree-children';
+import { MemoryView, readAddress, writeAddress } from './memory-address';
 
 
 export class Texture3D extends MemoryView {
@@ -46,7 +45,7 @@ export function WriteTexture3DMaterialAddress(
   z: number,
   voxelMaterialAddress: number,
 ): void {
-  WriteAddress(memory, texture3DAddress + Convert3DPositionToTexture3DMemoryAddressOffset(sizeX, sizeY, sizeZ, x, y, z), voxelMaterialAddress)
+  writeAddress(memory, texture3DAddress + Convert3DPositionToTexture3DMemoryAddressOffset(sizeX, sizeY, sizeZ, x, y, z), voxelMaterialAddress);
 }
 
 export function ReadTexture3DMaterialAddress(
@@ -59,7 +58,7 @@ export function ReadTexture3DMaterialAddress(
   y: number,
   z: number,
 ): number {
-  return ReadAddress(memory, texture3DAddress + Convert3DPositionToTexture3DMemoryAddressOffset(sizeX, sizeY, sizeZ, x, y, z))
+  return readAddress(memory, texture3DAddress + Convert3DPositionToTexture3DMemoryAddressOffset(sizeX, sizeY, sizeZ, x, y, z));
 }
 
 

@@ -44,7 +44,7 @@ export function MapMemory(
   destinationAddress: number,
   memoriesMap: TMappedMemories,
   warn: boolean = true
-): TMappedMemories  {
+): TMappedMemories {
   const subMap: TMappedMemoryAddresses = GetOrCreateMappedMemoryAddressesFromMappedMemories(sourceMemory, memoriesMap);
 
   if (warn && subMap.has(sourceAddress)) {

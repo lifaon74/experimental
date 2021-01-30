@@ -1,7 +1,7 @@
 
 <memory>: UInt8Array
 
-<voxelOctree>: represents a shape composed of many voxels in a performing structure
+<voxelOctree>: represents a shape composed of many voxels in a <memory>
   [is-child-voxel-octree: 0b{#0, #1, #2, ...}, <voxelOctreeChildAddress>#0 (32b), <voxelOctreeChildAddress>#1 (32b), ...]
 
 <voxelOctreeAddress>

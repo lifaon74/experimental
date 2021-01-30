@@ -1,5 +1,5 @@
 import { ResolveMappedAddress, TMappedMemories, TMappedMemoryAddresses } from './mapped-memory';
-import { ADDRESS_BYTES_PER_ELEMENT, ReadAddress, WriteAddress } from '../memory-address';
+import { ADDRESS_BYTES_PER_ELEMENT, readAddress, writeAddress } from '../memory-address';
 import { NO_MATERIAL } from '../material';
 
 export function ReadMappedAddress(
@@ -7,7 +7,7 @@ export function ReadMappedAddress(
   address: number,
   addressesMap: TMappedMemoryAddresses,
 ): number {
-  return ResolveMappedAddress(ReadAddress(memory, address), addressesMap);
+  return ResolveMappedAddress(readAddress(memory, address), addressesMap);
 }
 
 export function CopyRemappedAddress(
@@ -17,7 +17,7 @@ export function CopyRemappedAddress(
   destinationAddress: number,
   addressesMap: TMappedMemoryAddresses,
 ): void {
-  WriteAddress(destinationMemory, destinationAddress, ReadMappedAddress(sourceMemory, sourceAddress, addressesMap));
+  writeAddress(destinationMemory, destinationAddress, ReadMappedAddress(sourceMemory, sourceAddress, addressesMap));
 }
 
 /**
@@ -48,8 +48,8 @@ export function AreSameRemappedAddresses(
   address2: number,
   memoriesMap: TMappedMemories
 ): boolean {
-  const _address1: number = ReadAddress(memory1, address1);
-  const _address2: number = ReadAddress(memory2, address2);
+  const _address1: number = readAddress(memory1, address1);
+  const _address2: number = readAddress(memory2, address2);
   let remappedAddress1: number | undefined;
   let remappedAddress2: number | undefined;
 

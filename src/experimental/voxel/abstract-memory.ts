@@ -1,11 +1,13 @@
-import { TAllocFunction } from './memory-address';
+import { IAllocFunction } from './memory-address';
 
 export class AbstractMemory {
   public readonly buffer: ArrayBuffer;
 
   private writeIndex: number;
 
-  constructor(sizeOrBuffer: number /* size */ | ArrayBuffer /* buffer */) {
+  constructor(
+    sizeOrBuffer: number /* size */ | ArrayBuffer /* buffer */,
+  ) {
     this.buffer = (typeof sizeOrBuffer === 'number')
       ? new ArrayBuffer(sizeOrBuffer)
       : sizeOrBuffer;
@@ -46,14 +48,14 @@ export class AbstractMemory {
     return this.toUint8Array(byteOffset, this.writeIndex);
   }
 
-  toAllocFunction(): TAllocFunction {
+  toAllocFunction(): IAllocFunction {
     return (size: number) => {
       return this.alloc(size);
     };
   }
 }
 
-export function AllocBiggestBuffer(): ArrayBuffer {
+export function allocBiggestBuffer(): ArrayBuffer {
   let min: number = 0;
   let max: number = 2 ** 48;
   let buffer: ArrayBuffer;
@@ -73,10 +75,10 @@ export function AllocBiggestBuffer(): ArrayBuffer {
   return buffer;
 }
 
-export function LogMemory(
+export function logMemory(
   message: string,
   memory: Uint8Array,
-  alloc: TAllocFunction
+  alloc: IAllocFunction
 ) {
   console.log(message, memory.slice(0, alloc(0)));
 }

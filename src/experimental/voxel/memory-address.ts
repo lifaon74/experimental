@@ -1,4 +1,3 @@
-
 /**
  * Represents a pointer: a data into a memory with a specific address
  *  INFO: most of functions, working on voxels, take as input arguments the tuple [memory, address], which is somehow a MemoryView
@@ -17,7 +16,9 @@ export class MemoryView {
 }
 
 // an alloc function takes an size as input (how much bytes we wants to reserve), and returns an address where we may write data
-export type TAllocFunction = (size: number) => number;
+export interface IAllocFunction {
+  (size: number): number;
+}
 
 /*---------------------*/
 
@@ -32,7 +33,7 @@ export const ADDRESS_BYTES_PER_ELEMENT = 4;
 /**
  * Writes an address (value) into the memory
  */
-export function WriteAddress(
+export function writeAddress(
   memory: Uint8Array,
   address: number,
   value: number
@@ -55,7 +56,7 @@ export function WriteAddress(
 /**
  * Reads an address from the memory
  */
-export function ReadAddress(
+export function readAddress(
   memory: Uint8Array,
   address: number,
 ): number {
@@ -67,33 +68,11 @@ export function ReadAddress(
   ) >>> 0;
 }
 
-export function ReadDepth1DynamicAddress(
-  memory: Uint8Array,
-  address: number,
-): number {
-  return ReadAddress(memory, ReadAddress(memory, address));
-}
-
-/**
- * Reads a dynamic address from the memory
- */
-export function ReadDynamicAddress(
-  memory: Uint8Array,
-  address: number,
-  depth: number,
-): number {
-  while (depth >= 0) {
-    address = ReadAddress(memory, address);
-    depth--;
-  }
-  return address;
-}
-
 
 /**
  * Copies the address at sourceMemory[sourceAddress] into destinationMemory[destinationAddress]
  */
-export function CopyAddress(
+export function copyAddress(
   sourceMemory: Uint8Array,
   sourceAddress: number,
   destinationMemory: Uint8Array,
@@ -107,7 +86,7 @@ export function CopyAddress(
 /**
  * Returns true if both addresses at memory[address1] and memory2[address2] are equals
  */
-export function AreSameAddresses(
+export function areSameAddresses(
   memory1: Uint8Array,
   address1: number,
   memory2: Uint8Array,
@@ -121,7 +100,7 @@ export function AreSameAddresses(
   );
 }
 
-export function AreSameMemoriesAndAddresses(
+export function areSameMemoriesAndAddresses(
   memory1: Uint8Array,
   address1: number,
   memory2: Uint8Array,
@@ -133,19 +112,19 @@ export function AreSameMemoriesAndAddresses(
 
 /*----*/
 
-export type TMemoryMap = Uint32Array;
+export type IMemoryMap = Uint32Array;
 
 export const NOT_MAPPED: number = 0xffffffff;
 
-export function CreateMemoryMap(
+export function createMemoryMap(
   size: number = 2 ** 31
-): TMemoryMap {
-  return ClearMemoryMap(new Uint32Array(size));
+): IMemoryMap {
+  return clearMemoryMap(new Uint32Array(size));
 }
 
 
-export function ClearMemoryMap(
-  memoryMap: TMemoryMap
-): TMemoryMap {
+export function clearMemoryMap(
+  memoryMap: IMemoryMap
+): IMemoryMap {
   return memoryMap.fill(NOT_MAPPED);
 }

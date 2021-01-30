@@ -1,61 +1,107 @@
 import {
-  ConvertVoxelOctreeDepthToSide, ReadVoxelMaterialAddressOfVoxelOctreeAtPosition, VoxelOctree, WriteVoxelOctreeMaterialAddress
-} from './octree';
-import { WriteNewVoxelMaterial, NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT, VoxelMaterial } from './material';
-import { TAllocFunction } from './memory-address';
+  convertVoxelOctreeDepthToSide, readVoxelMaterialAddressOfVoxelOctreeAtPosition, VoxelOctree,
+  writeVoxelOctreeMaterialAddress
+} from '../octree';
+import { NO_MATERIAL, VoxelMaterial } from '../material';
+import { IAllocFunction } from '../memory-address';
 
-export type TDrawCallbackWithMaterial = (
-  x: number,
-  y: number,
-  z: number,
-  materialIndex: number,
-) => void;
+// export type TDrawCallbackWithMaterial = (
+//   x: number,
+//   y: number,
+//   z: number,
+//   materialIndex: number,
+// ) => void;
 
-export type TDrawCallback = (
-  x: number,
-  y: number,
-  z: number,
-) => void;
+export interface IDrawFunction {
+  (
+    x: number,
+    y: number,
+    z: number,
+  ): void;
+}
 
-export function ClampDraw(
-  draw: TDrawCallback,
+export interface IDrawPipe {
+  (draw: IDrawFunction): IDrawFunction;
+}
+
+
+/*----*/
+
+export function pipeDraw(
+  fns: IDrawPipe[]
+): IDrawPipe {
+  return (firstArg: IDrawFunction): IDrawFunction => {
+    return fns.reduce((value: IDrawFunction, fnc: IDrawPipe) => fnc(value), firstArg);
+  };
+}
+
+/*----*/
+
+
+export function clampDraw(
   x_min: number,
   y_min: number,
   z_min: number,
   x_max: number,
   y_max: number,
   z_max: number,
-): TDrawCallback {
-  return (
-    x: number,
-    y: number,
-    z: number,
-  ) => {
-    if (
-      ((x_min <= x) && (x < x_max))
-      && ((y_min <= y) && (y < y_max))
-      && ((z_min <= z) && (z < z_max))
-    ) {
-      draw(x, y, z);
-    }
+): IDrawPipe {
+  return (draw: IDrawFunction): IDrawFunction => {
+    return (
+      x: number,
+      y: number,
+      z: number,
+    ) => {
+      if (
+        ((x_min <= x) && (x < x_max))
+        && ((y_min <= y) && (y < y_max))
+        && ((z_min <= z) && (z < z_max))
+      ) {
+        draw(x, y, z);
+      }
+    };
   };
 }
 
-export function ClampDrawForOctree(
-  draw: TDrawCallback,
-  depth: number,
-): TDrawCallback {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
-  return ClampDraw(draw, 0, 0, 0, side, side, side);
-}
+// export function clampDraw(
+//   draw: IDrawFunction,
+//   x_min: number,
+//   y_min: number,
+//   z_min: number,
+//   x_max: number,
+//   y_max: number,
+//   z_max: number,
+// ): IDrawFunction {
+//   return (
+//     x: number,
+//     y: number,
+//     z: number,
+//   ) => {
+//     if (
+//       ((x_min <= x) && (x < x_max))
+//       && ((y_min <= y) && (y < y_max))
+//       && ((z_min <= z) && (z < z_max))
+//     ) {
+//       draw(x, y, z);
+//     }
+//   };
+// }
+
+// export function clampDrawForOctree(
+//   draw: IDrawFunction,
+//   depth: number,
+// ): IDrawFunction {
+//   const side: number = convertVoxelOctreeDepthToSide(depth);
+//   return clampDraw(draw, 0, 0, 0, side, side, side);
+// }
 
 
-export function TranslateDraw(
-  draw: TDrawCallback,
+export function translateDraw(
+  draw: IDrawFunction,
   x: number,
   y: number,
   z: number,
-): TDrawCallback {
+): IDrawFunction {
   return (
     _x: number,
     _y: number,
@@ -65,15 +111,15 @@ export function TranslateDraw(
   };
 }
 
-export function DrawSphere(
-  draw: TDrawCallback,
+export function drawSphere(
+  draw: IDrawFunction,
   radius: number,
 ): void {
   const offset: number = -0.5;
 
   for (let x = -radius + offset; x <= radius - offset; x++) {
-    for (let y = -radius + offset; y <= radius- offset; y++) {
-      for (let z = -radius + offset; z <= radius- offset; z++) {
+    for (let y = -radius + offset; y <= radius - offset; y++) {
+      for (let z = -radius + offset; z <= radius - offset; z++) {
 
         const d: number = Math.sqrt(
           Math.pow(x, 2)
@@ -89,8 +135,8 @@ export function DrawSphere(
   }
 }
 
-export function DrawBox(
-  draw: TDrawCallback,
+export function drawBox(
+  draw: IDrawFunction,
   x_size: number,
   y_size: number,
   z_size: number,
@@ -104,11 +150,11 @@ export function DrawBox(
   }
 }
 
-export function DrawCube(
-  draw: TDrawCallback,
+export function drawCube(
+  draw: IDrawFunction,
   side: number,
 ): void {
-  DrawBox(draw, side, side, side);
+  drawBox(draw, side, side, side);
 }
 
 
@@ -118,18 +164,18 @@ export function drawUniformRedCubeForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
-  const material = VoxelMaterial.create(memory, alloc, 255, 0, 0, 255, 0);
+  const side: number = convertVoxelOctreeDepthToSide(depth);
+  const material = VoxelMaterial.create(memory, alloc, 255, 0, 0);
 
-  DrawCube(
-    ClampDraw((
+  drawCube(
+    clampDraw((
       x: number,
       y: number,
       z: number,
       ) => {
-        WriteVoxelOctreeMaterialAddress(
+        writeVoxelOctreeMaterialAddress(
           memory,
           address,
           alloc,
@@ -150,10 +196,10 @@ export function drawUniformSphereForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
   materialAddress: number,
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
+  const side: number = convertVoxelOctreeDepthToSide(depth);
   const radius: number = Math.floor(side / 2);
 
   const draw = (
@@ -162,7 +208,7 @@ export function drawUniformSphereForOctree(
     z: number,
   ) => {
     // console.log('write at', x, y, z);
-    WriteVoxelOctreeMaterialAddress(
+    writeVoxelOctreeMaterialAddress(
       memory,
       address,
       alloc,
@@ -174,9 +220,9 @@ export function drawUniformSphereForOctree(
     );
   };
 
-  DrawSphere(
-    TranslateDraw(
-      ClampDraw(
+  drawSphere(
+    translateDraw(
+      clampDraw(
         draw,
         0, 0, 0, side, side, side
       ),
@@ -190,9 +236,9 @@ export function drawUniformRedSphereForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
 ) {
-  const material = VoxelMaterial.create(memory, alloc, 255, 0, 0, 255, 0);
+  const material = VoxelMaterial.create(memory, alloc, 255, 0, 0);
   drawUniformSphereForOctree(
     memory,
     address,
@@ -206,18 +252,18 @@ export function drawRandomCubeForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
   materials: number[]
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
+  const side: number = convertVoxelOctreeDepthToSide(depth);
 
-  DrawCube(
-    ClampDraw((
+  drawCube(
+    clampDraw((
       x: number,
       y: number,
       z: number,
       ) => {
-        WriteVoxelOctreeMaterialAddress(
+        writeVoxelOctreeMaterialAddress(
           memory,
           address,
           alloc,
@@ -239,12 +285,12 @@ export function drawRainbowCubeForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
+  const side: number = convertVoxelOctreeDepthToSide(depth);
 
-  DrawCube(
-    ClampDraw((
+  drawCube(
+    clampDraw((
       x: number,
       y: number,
       z: number,
@@ -255,11 +301,9 @@ export function drawRainbowCubeForOctree(
           Math.floor(x / (side - 1) * 255),
           Math.floor(y / (side - 1) * 255),
           Math.floor(z / (side - 1) * 255),
-          255,
-          /*0*/123
         );
 
-        WriteVoxelOctreeMaterialAddress(
+        writeVoxelOctreeMaterialAddress(
           memory,
           address,
           alloc,
@@ -280,18 +324,18 @@ export function drawEmptyCubeForOctree(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
   materialAddress: number,
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
+  const side: number = convertVoxelOctreeDepthToSide(depth);
 
-  DrawCube(
-    ClampDraw((
+  drawCube(
+    clampDraw((
       x: number,
       y: number,
       z: number,
       ) => {
-        WriteVoxelOctreeMaterialAddress(
+        writeVoxelOctreeMaterialAddress(
           memory,
           address,
           alloc,
@@ -307,14 +351,14 @@ export function drawEmptyCubeForOctree(
     side
   );
 
-  DrawCube(
-    TranslateDraw(
-      ClampDraw((
+  drawCube(
+    translateDraw(
+      clampDraw((
         x: number,
         y: number,
         z: number,
         ) => {
-          WriteVoxelOctreeMaterialAddress(
+          writeVoxelOctreeMaterialAddress(
             memory,
             address,
             alloc,
@@ -327,7 +371,7 @@ export function drawEmptyCubeForOctree(
         },
         1, 1, 1, side - 1, side - 1, side - 1
       ),
-      1,  1, 1
+      1, 1, 1
     ),
     side - 2
   );
@@ -337,20 +381,20 @@ export function drawVoxelsToDebugUnreachableVoxels(
   memory: Uint8Array,
   address: number,
   depth: number,
-  alloc: TAllocFunction,
+  alloc: IAllocFunction,
 ) {
-  const side: number = ConvertVoxelOctreeDepthToSide(depth);
-  const externalMaterial: VoxelMaterial = VoxelMaterial.create(memory, alloc, 255, 0, 0, 255, 0);
-  const randomMaterials: VoxelMaterial[] = Array.from({ length: 4 }, () => VoxelMaterial.create(memory, alloc, 0, Math.floor(Math.random() * 256), 0, 255, 0));
+  const side: number = convertVoxelOctreeDepthToSide(depth);
+  const externalMaterial: VoxelMaterial = VoxelMaterial.create(memory, alloc, 255, 0, 0);
+  const randomMaterials: VoxelMaterial[] = Array.from({ length: 4 }, () => VoxelMaterial.create(memory, alloc, 0, Math.floor(Math.random() * 256), 0));
 
-  DrawCube(
-    TranslateDraw(
-      ClampDraw((
+  drawCube(
+    translateDraw(
+      clampDraw((
         x: number,
         y: number,
         z: number,
         ) => {
-          WriteVoxelOctreeMaterialAddress(
+          writeVoxelOctreeMaterialAddress(
             memory,
             address,
             alloc,
@@ -363,19 +407,19 @@ export function drawVoxelsToDebugUnreachableVoxels(
         },
         1, 1, 1, side - 1, side - 1, side - 1
       ),
-      1,  1, 1
+      1, 1, 1
     ),
     side - 2
   );
 
-  DrawCube(
-    TranslateDraw(
-      ClampDraw((
+  drawCube(
+    translateDraw(
+      clampDraw((
         x: number,
         y: number,
         z: number,
         ) => {
-          WriteVoxelOctreeMaterialAddress(
+          writeVoxelOctreeMaterialAddress(
             memory,
             address,
             alloc,
@@ -388,7 +432,7 @@ export function drawVoxelsToDebugUnreachableVoxels(
         },
         2, 2, 2, side - 2, side - 2, side - 2
       ),
-      2,  2, 2
+      2, 2, 2
     ),
     side - 4
   );
@@ -399,9 +443,9 @@ export function drawVoxelsToDebugUnreachableVoxels(
 export function sliceOctree(
   octree: VoxelOctree,
   z: number,
-  cb: (x: number, y: number) => number = (x: number, y: number) => ReadVoxelMaterialAddressOfVoxelOctreeAtPosition(octree.memory, octree.address, octree.depth, x, y, z),
+  cb: (x: number, y: number) => number = (x: number, y: number) => readVoxelMaterialAddressOfVoxelOctreeAtPosition(octree.memory, octree.address, octree.depth, x, y, z),
 ): ImageData {
-  const side = ConvertVoxelOctreeDepthToSide(octree.depth);
+  const side = convertVoxelOctreeDepthToSide(octree.depth);
   const img = new ImageData(side, side);
 
   let i = 0;
@@ -414,7 +458,7 @@ export function sliceOctree(
         img.data[i++] = octree.memory[materialId];
         img.data[i++] = octree.memory[materialId + 1];
         img.data[i++] = octree.memory[materialId + 2];
-        img.data[i++] = octree.memory[materialId + 3];
+        img.data[i++] = 255;
       }
     }
   }
@@ -440,5 +484,5 @@ export function displayOctreeSlice(
   octree: VoxelOctree,
   z: number,
 ): HTMLCanvasElement {
-  return drawImageData(sliceOctree(octree, z))
+  return drawImageData(sliceOctree(octree, z));
 }
