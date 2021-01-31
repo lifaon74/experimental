@@ -20,13 +20,14 @@ import { IVoxelOctreeForRayTrace, voxelOctreeRaytrace, } from '../raytrace/raytr
 import { assert } from '../../assert/assert';
 import { mat4, vec2, vec3 } from 'gl-matrix';
 import { mat4_display } from '../matrix-helpers';
-import { nextHitCubeIn } from '../raytrace/collide/next-hit-cube-in';
+import { hitCubeIn } from '../raytrace/collide/hit-cube-in';
 import { isValidHitPoint } from '../raytrace/collide/is-valid-hit-point';
 import { isNextPointInCube } from '../raytrace/collide/is-next-point-in-cube';
 import { arrayEquals } from '../../assert/array-equals';
-import { nextHitCubeOut } from '../raytrace/collide/next-hit-cube-out';
+import { hitCubeOut } from '../raytrace/collide/hit-cube-out';
 import { debugVoxelRayTrace } from './debug-voxel-ray-trace';
 import { formatSize } from '../misc/format-size';
+import { debugVoxelCollide } from './debug-voxel-collide';
 
 
 function speedTest(): void {

@@ -30,9 +30,12 @@ export function convertVec3PositionToVoxelOctreeChildIndex(
   ) >>> 0;
 }
 
-export function convertIntVec3PositionToVoxelOctreeChildIndex(
+
+export type IVoxelOctreeCoordinates = Uint16Array;
+
+export function convertVoxelOctreeCoordinatesToVoxelOctreeChildIndex(
   voxelOctreeDepth: number,
-  position: Uint8Array,
+  position: IVoxelOctreeCoordinates,
 ) {
   return (
     ((position[0] >> voxelOctreeDepth) & 0x1)

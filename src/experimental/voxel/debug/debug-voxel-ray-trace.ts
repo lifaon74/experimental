@@ -4,7 +4,8 @@ import {
 import { AbstractMemory } from '../abstract-memory';
 import {
   createCanvasContext,
-  displayVoxelOctreeSlice, drawAxisForOctree, drawImageData, drawRainbowCubeForOctree, drawRainbowSphereForOctree,
+  displayVoxelOctreeSlice, drawAxisForOctree, drawImageData, drawRainbowCubeForOctree, drawRainbowInnerCubeForOctree,
+  drawRainbowSphereForOctree,
   drawUniformInnerRedCubeForOctree,
   drawUniformRedSphereForOctree,
   ISliceVoxelOctreeCallback, sliceOctreeUsingReadVoxel,
@@ -56,6 +57,13 @@ const createUniformInnerRedCubeVoxelOctree = (side: number) => {
   return voxel;
 };
 
+const creatRainbowInnerCubeVoxelOctree = (side: number) => {
+  const { voxel, alloc } = createEmptyVoxelOctree(side);
+  drawRainbowInnerCubeForOctree(voxel.memory, voxel.address, voxel.depth, alloc);
+  logSize(alloc);
+  return voxel;
+};
+
 const createRainbowSphereVoxelOctree = (side: number) => {
   const { voxel, alloc } = createEmptyVoxelOctree(side);
   drawRainbowSphereForOctree(voxel.memory, voxel.address, voxel.depth, alloc);
@@ -80,7 +88,8 @@ async function debugVoxelRayTrace1() {
   // const voxelOctree = createUniformRedSphereVoxelOctree(8);
   // const voxelOctree = createRainbowSphereVoxelOctree(8);
   // const voxelOctree = createAxisVoxelOctree(8);
-  const voxelOctree = createUniformInnerRedCubeVoxelOctree(8);
+  // const voxelOctree = createUniformInnerRedCubeVoxelOctree(8);
+  const voxelOctree = creatRainbowInnerCubeVoxelOctree(8);
   // displayVoxelOctreeSlice(voxelOctree, sliceOctreeUsingReadVoxel(4));
 
   /*--*/
@@ -262,10 +271,20 @@ function startCameraControl(): IRefreshControlFunction {
   };
 }
 
+function debugCanvasCoordinates(
+  ratio: number = 1,
+  canvas: HTMLCanvasElement = document.body.querySelector('canvas') as HTMLCanvasElement,
+): void {
+  canvas.addEventListener('click', (event: MouseEvent) => {
+    const rect: DOMRect = canvas.getBoundingClientRect();
+    console.log((event.clientX - rect.x) * ratio, (event.clientY - rect.y) * ratio);
+  });
+}
 
 async function debugVoxelRayTrace2() {
   // await debugMatrix();
-  const side: number = 64;
+  const windowSize: number = 1024;
+  const side: number = 8;
   const side2: number = side / 2;
 
   // const projection = mat4.ortho(mat4.create(), -side2, side2, -side2, side2, -side2, side2);
@@ -284,10 +303,10 @@ async function debugVoxelRayTrace2() {
   mat4.mul(mvp, mat4.mul(mvp, projection, view), model);
   const mvpi = mat4.invert(mat4.create(), mvp);
 
-  mat4_display('projection', projection);
-  mat4_display('view', view);
-  mat4_display('model', model);
-  mat4_display('mvp', mvp);
+  // mat4_display('projection', projection);
+  // mat4_display('view', view);
+  // mat4_display('model', model);
+  // mat4_display('mvp', mvp);
   // mat4_display('mvpi', mvpi);
 
   // const pointAInClippingSpace: vec3 = vec3.fromValues(0, 0, -1);
@@ -301,9 +320,10 @@ async function debugVoxelRayTrace2() {
 
   function draw() {
     // const voxelOctree = createRainbowCubeVoxelOctree(side);
-    // const voxelOctree = createRainbowSphereVoxelOctree(side);
+    const voxelOctree = createRainbowSphereVoxelOctree(side);
     // const voxelOctree = createAxisVoxelOctree(side, side / 16);
-    const voxelOctree = createUniformInnerRedCubeVoxelOctree(side);
+    // const voxelOctree = createUniformInnerRedCubeVoxelOctree(side);
+    // const voxelOctree = creatRainbowInnerCubeVoxelOctree(side);
 
     function render(imageData: ImageData): ImageData {
       const pointAInClippingSpace: vec3 = vec3.fromValues(0, 0, -1);
@@ -318,14 +338,39 @@ async function debugVoxelRayTrace2() {
       const height: number = imageData.height;
       const heightM1: number = height - 1;
 
+      const drawDebug = (x: number, y: number) => {
+        console.log('draw at', x, y);
+        pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / width;
+        pointAInClippingSpace[1] = pointBInClippingSpace[1] = -(((2 * y) - heightM1) / height);
+
+        vec3.transformMat4(pointAInModelSpace, pointAInClippingSpace, mvpi);
+        vec3.transformMat4(pointBInModelSpace, pointBInClippingSpace, mvpi);
+        vec3.sub(rayVector, pointBInModelSpace, pointAInModelSpace);
+
+        console.log('pointAInClippingSpace', pointAInClippingSpace.join(', '));
+        console.log('pointBInClippingSpace', pointBInClippingSpace.join(', '));
+        console.log('pointAInModelSpace', pointAInModelSpace.join(', '));
+        console.log('pointBInModelSpace', pointBInModelSpace.join(', '));
+        console.log('--');
+        console.log('rayPosition', pointAInModelSpace.join(', '));
+        console.log('rayVector', rayVector.join(', '));
+        debugger;
+        const materialId: number = voxelOctreeRaytrace(voxelOctree.memory, voxelOctree.address, voxelOctree.depth, pointAInModelSpace, rayVector, hitPosition);
+        console.log('materialId', materialId);
+
+        const j = (x + y * width) * 4;
+        imageData.data[j] = 0;
+        imageData.data[j + 1] = 255;
+        imageData.data[j + 1] = 0;
+        imageData.data[j + 1] = 255;
+      };
+
       let i = 0;
       for (let y = 0; y < height; y++) {
-        // y = widthM1 / 2;
         pointAInClippingSpace[1] = pointBInClippingSpace[1] = -(((2 * y) - heightM1) / height); // negate because y axis of Image data is opposite of viewport
         // pointAInClippingSpace[1] = pointBInClippingSpace[1] = (((2 * y) - heightM1) / heightM1); // naive
 
         for (let x = 0; x < width; x++) {
-          // x = heightM1 / 2;
           pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / width;
           // pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / widthM1; // naive
 
@@ -333,17 +378,7 @@ async function debugVoxelRayTrace2() {
           vec3.transformMat4(pointBInModelSpace, pointBInClippingSpace, mvpi);
           vec3.sub(rayVector, pointBInModelSpace, pointAInModelSpace);
 
-          // console.log('pointAInClippingSpace', pointAInClippingSpace.join(', '));
-          // console.log('pointBInClippingSpace', pointBInClippingSpace.join(', '));
-          // console.log('pointAInModelSpace', pointAInModelSpace.join(', '));
-          // console.log('pointBInModelSpace', pointBInModelSpace.join(', '));
-          // console.log('--');
-          // console.log('rayPosition', pointAInModelSpace.join(', '));
-          // console.log('rayVector', rayVector.join(', '));
           const materialId: number = voxelOctreeRaytrace(voxelOctree.memory, voxelOctree.address, voxelOctree.depth, pointAInModelSpace, rayVector, hitPosition);
-          // console.log('materialId', materialId);
-
-
 
           if (materialId === NO_MATERIAL) {
             imageData.data[i + 3] = 0;
@@ -355,34 +390,38 @@ async function debugVoxelRayTrace2() {
             imageData.data[i++] = 255;
           }
 
-          // return imageData;
         }
       }
+
+      // drawDebug(39, 30);
+
       return imageData;
     }
 
     console.time('raycast');
-    drawImageData(render(new ImageData(128, 128)));
+    drawImageData(render(new ImageData(windowSize, windowSize)));
     console.timeEnd('raycast');
+    debugCanvasCoordinates(windowSize / 512);
 
 
     /*----*/
 
-    // const imageData = new ImageData(128, 128);
-    // const ctx: CanvasRenderingContext2D = createCanvasContext(imageData.width, imageData.height);
-    //
-    // const refresh = startCameraControl();
-    // const loop = () => {
-    //   requestAnimationFrame(() => {
-    //     refresh(view, view);
-    //     mat4.mul(mvp, mat4.mul(mvp, projection, view), model);
-    //     // mat4_display('mvp', mvp);
-    //     mat4.invert(mvpi, mvp);
-    //     ctx.putImageData(render(imageData), 0, 0);
-    //     loop();
-    //   });
-    // };
-    // loop();
+    const imageData = new ImageData(windowSize, windowSize);
+    const ctx: CanvasRenderingContext2D = createCanvasContext(imageData.width, imageData.height);
+
+    const refresh = startCameraControl();
+    const loop = () => {
+      requestAnimationFrame(() => {
+        refresh(view, view);
+        mat4.mul(mvp, mat4.mul(mvp, projection, view), model);
+        // mat4_display('mvp', mvp);
+        mat4.invert(mvpi, mvp);
+        ctx.putImageData(render(imageData), 0, 0);
+        loop();
+      });
+    };
+    loop();
+
   }
 
   draw();

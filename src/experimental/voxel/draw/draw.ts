@@ -274,6 +274,32 @@ export function drawUniformInnerRedCubeForOctree(
   ], draw));
 }
 
+/**
+ * Fills a voxel with a red cube, and keeps 1vx all around
+ */
+export function drawRainbowInnerCubeForOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
+  alloc: IAllocFunction,
+) {
+  const side: number = convertVoxelOctreeDepthToSide(voxelOctreeDepth);
+
+  const draw = createRainbowDrawFunctionForVoxelOctree(
+    memory,
+    voxelOctreeAddress,
+    voxelOctreeDepth,
+    alloc,
+  );
+
+  const cubeEmpty = cubeDraw(side);
+
+  cubeEmpty(composeNowDraw([
+    translateDrawPipe(1, 1, 1),
+    clampDrawPipe(1, 1, 1, side - 1, side - 1, side - 1),
+  ], draw));
+}
+
 
 /**
  * Fills entirely a voxel with axis

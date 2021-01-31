@@ -2,65 +2,50 @@ import { convertVoxelOctreeDepthToSide, VoxelOctree } from '../octree';
 import { mat4, vec3, vec4 } from 'gl-matrix';
 import { NO_MATERIAL } from '../material';
 import {
-  convertIntVec3PositionToVoxelOctreeChildIndex, convertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex,
-  isVoxelOctreeChildIndexAVoxelOctreeAddress
+  convertVoxelOctreeCoordinatesToVoxelOctreeChildIndex,
+  convertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex,
+  isVoxelOctreeChildIndexAVoxelOctreeAddress, IVoxelOctreeCoordinates, convertVec3PositionToVoxelOctreeChildIndex
 } from '../octree-children';
 import { readAddress } from '../memory-address';
 import { isValidHitPoint } from './collide/is-valid-hit-point';
 import { isPointOnCubeSurfaceOrOut } from './collide/is-point-on-cube-surface';
-import { nextHitCubeOut } from './collide/next-hit-cube-out';
-import { nextHitCubeIn } from './collide/next-hit-cube-in';
+import { hitCubeOut } from './collide/hit-cube-out';
+import { hitCubeIn } from './collide/hit-cube-in';
 
 
-
-function getHitPositionFocVoxelOctree(
+function convertHitPositionToVoxelOctreeCoordinates(
   rayVector: vec3,
   hitPosition: vec3,
-  intHitPosition: Uint8Array,
+  side: number,
+  voxelOctreeCoordinates: IVoxelOctreeCoordinates,
 ): void {
   // intHitPosition[0] = hitPosition[0] - ((rayVector[0] < 0) ? Number.EPSILON : 0);
   // intHitPosition[1] = hitPosition[1] - ((rayVector[1] < 0) ? Number.EPSILON : 0);
   // intHitPosition[2] = hitPosition[2] - ((rayVector[2] < 0) ? Number.EPSILON : 0);
   for (let i = 0; i < 3; i++) {
-    // intHitPosition[i] = hitPosition[i] - ((rayVector[i] < 0) ? Number.EPSILON : 0); // not working
-    intHitPosition[i] = hitPosition[i];
-    if ((rayVector[i] < 0) && (intHitPosition[i] === hitPosition[i])) {
-      intHitPosition[i]--;
+    voxelOctreeCoordinates[i] = hitPosition[i];
+    if ((rayVector[i] < 0) && (voxelOctreeCoordinates[i] === hitPosition[i])) {
+      voxelOctreeCoordinates[i]--;
     }
   }
 }
 
-function getRayPositionForVoxelOctreeChild(
-  rayVector: vec3,
+function convertVoxelOctreeCoordinatesToVoxelOctreeChildPosition(
+  voxelOctreeCoordinates: IVoxelOctreeCoordinates,
   side: number,
-  hitPosition: vec3,
-  rayPositionForVoxelOctreeChild: vec3,
+  voxelOctreeChildCoordinates: vec3,
 ): void {
-  // rayPositionForVoxelOctreeChild[0] = hitPosition[0] % side;
-  // rayPositionForVoxelOctreeChild[1] = hitPosition[1] % side;
-  // rayPositionForVoxelOctreeChild[2] = hitPosition[2] % side;
   for (let i = 0; i < 3; i++) {
-    rayPositionForVoxelOctreeChild[i] = hitPosition[i] % side;
-    if ((rayVector[i] < 0) && (rayPositionForVoxelOctreeChild[i] === 0)) {
-      rayPositionForVoxelOctreeChild[i] += side;
-    }
+    voxelOctreeChildCoordinates[i] = Math.floor(voxelOctreeCoordinates[i] / side) * side;
   }
+  // const mask: number = ~(side - 1);
+  // for (let i: number = 0; i < 3; i++) {
+  //   voxelOctreeChildCoordinates[i] = voxelOctreeCoordinates[i] & mask;
+  // }
 }
 
-
-function updateHitPositionFromHitPositionOutAndRayPositionForVoxelOctreeChild(
-  hitPosition: vec3,
-  hitPositionOut: vec3,
-  rayPositionForVoxelOctreeChild: vec3,
-): void {
-  hitPosition[0] += hitPositionOut[0] - rayPositionForVoxelOctreeChild[0];
-  hitPosition[1] += hitPositionOut[1] - rayPositionForVoxelOctreeChild[1];
-  hitPosition[2] += hitPositionOut[2] - rayPositionForVoxelOctreeChild[2];
-}
-
-const HIT_POSITION_FOR_VOXEL_OCTREE: Uint8Array = new Uint8Array(3);
-const HIT_POSITION_OUT: vec3 = vec3.create();
-const RAY_POSITION_FOR_VOXEL_OCTREE_CHILD: vec3 = vec3.create();
+const HIT_POSITION_VOXEL_OCTREE_COORDINATES: IVoxelOctreeCoordinates = new Uint16Array(3);
+const VOXEL_OCTREE_CHILD_POSITION: vec3 = vec3.create();
 
 export function voxelOctreeRaytrace(
   memory: Uint8Array,
@@ -72,39 +57,33 @@ export function voxelOctreeRaytrace(
 ): number { // hitVoxelMaterialAddress
 
   const side: number = convertVoxelOctreeDepthToSide(voxelOctreeDepth);
-  nextHitCubeIn(rayPosition, rayVector, side, hitPosition);
+  hitCubeIn(rayPosition, rayVector, side, hitPosition);
 
   let i: number = 0;
   if (isValidHitPoint(hitPosition)) {
     while (i++ < side) {
-      // console.log('hitPosition', hitPosition.join(', '));
-
-      getHitPositionFocVoxelOctree(rayVector, hitPosition, HIT_POSITION_FOR_VOXEL_OCTREE);
-      // console.log('intHitPosition', HIT_POSITION_FOR_VOXEL_OCTREE.join(', '));
+      convertHitPositionToVoxelOctreeCoordinates(rayVector, hitPosition, side, HIT_POSITION_VOXEL_OCTREE_COORDINATES);
 
       let localVoxelOctreeAddress: number = voxelOctreeAddress;
       let localVoxelOctreeDepth: number = voxelOctreeDepth;
 
       while (localVoxelOctreeDepth >= 0) {
-        const voxelOctreeChildIndex: number = convertIntVec3PositionToVoxelOctreeChildIndex(localVoxelOctreeDepth, HIT_POSITION_FOR_VOXEL_OCTREE);
+        const voxelOctreeChildIndex: number = convertVoxelOctreeCoordinatesToVoxelOctreeChildIndex(localVoxelOctreeDepth, HIT_POSITION_VOXEL_OCTREE_COORDINATES);
         const voxelOctreeChildAddress: number = readAddress(memory, convertVoxelOctreeChildIndexToVoxelOctreeChildAddressAddressUsingIndex(localVoxelOctreeAddress, voxelOctreeChildIndex));
         if (isVoxelOctreeChildIndexAVoxelOctreeAddress(memory, localVoxelOctreeAddress, voxelOctreeChildIndex)) {
           localVoxelOctreeAddress = voxelOctreeChildAddress;
           localVoxelOctreeDepth--;
         } else {
           if (voxelOctreeChildAddress === NO_MATERIAL) {
-            const localSide: number = convertVoxelOctreeDepthToSide(localVoxelOctreeDepth);
-            getRayPositionForVoxelOctreeChild(rayVector, localSide, hitPosition, RAY_POSITION_FOR_VOXEL_OCTREE_CHILD);
-            // console.log('side', localSide, RAY_POSITION_FOR_VOXEL_OCTREE_CHILD);
-            nextHitCubeOut(RAY_POSITION_FOR_VOXEL_OCTREE_CHILD, rayVector, localSide, HIT_POSITION_OUT);
+            const localSide: number = 1 << localVoxelOctreeDepth;
+            convertVoxelOctreeCoordinatesToVoxelOctreeChildPosition(HIT_POSITION_VOXEL_OCTREE_COORDINATES, localSide, VOXEL_OCTREE_CHILD_POSITION);
+            hitCubeOut(rayPosition, rayVector, VOXEL_OCTREE_CHILD_POSITION, localSide, hitPosition);
 
-            if (!isValidHitPoint(HIT_POSITION_OUT)) {
-              // debugger;
-              // console.log('failed');
+            if (!isValidHitPoint(hitPosition)) {
+              debugger;
+              hitCubeOut(rayPosition, rayVector, VOXEL_OCTREE_CHILD_POSITION, localSide, hitPosition);
               return NO_MATERIAL;
             }
-
-            updateHitPositionFromHitPositionOutAndRayPositionForVoxelOctreeChild(hitPosition, HIT_POSITION_OUT, RAY_POSITION_FOR_VOXEL_OCTREE_CHILD);
 
             if (isPointOnCubeSurfaceOrOut(hitPosition, side)) {
               return NO_MATERIAL;
