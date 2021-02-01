@@ -101,67 +101,57 @@ export function voxelOctreeRaytrace(
   return NO_MATERIAL;
 }
 
-
-
-
-
-
-/*------------*/
-
-export interface ILight {
-  color: vec3;
-  intensity: number;
+export function voxelOctreeObjectRaytrace(
+  voxelOctree: VoxelOctree,
+  rayPosition: vec3,
+  rayVector: vec3,
+  hitPosition: vec3,
+): number {
+  return voxelOctreeRaytrace(
+    voxelOctree.memory,
+    voxelOctree.address,
+    voxelOctree.depth,
+    rayPosition,
+    rayVector,
+    hitPosition,
+  );
 }
 
+/*----------------------------*/
 
-export interface IVoxelOctreeForRayTrace {
+export interface IObject3DVoxelOctree {
   voxelOctree: VoxelOctree;
-  matrix: mat4;
+  mvp: mat4;
+  mvpi: mat4;
 }
 
-export interface ILightForRayTrace {
-  light: ILight;
-  matrix: mat4;
+export interface IVoxelOctreeRaytraceManyReturn {
+  voxelOctree: VoxelOctree;
+  voxelMaterialAddress: number;
+  hitPosition: vec3;
 }
 
-/*
+// const POINT_A_IN_CLIPPING_SPACE: vec3 = vec3.fromValues(0, 0, -1);
+// const POINT_B_IN_CLIPPING_SPACE: vec3 = vec3.fromValues(0, 0, 1);
+const POINT_A_IN_MODEL_SPACE: vec3 = vec3.create();
+const POINT_B_IN_MODEL_SPACE: vec3 = vec3.create();
+const RAY_VECTOR: vec3 = vec3.create();
 
-LINKS:
+// TODO continue here
+export function voxelOctreeRaytraceMany(
+  voxelOctrees: IObject3DVoxelOctree[],
+  pointAInClippingSpace: vec3,
+  pointBInClippingSpace: vec3,
+  hitPosition: vec3,
+): IVoxelOctreeRaytraceManyReturn | null {
+  for (let i = 0, l = voxelOctrees.length; i < l; i++) {
+    const voxelOctree: IObject3DVoxelOctree = voxelOctrees[i];
+    vec3.transformMat4(POINT_A_IN_MODEL_SPACE, pointAInClippingSpace, voxelOctree.mvpi);
+    vec3.transformMat4(POINT_B_IN_MODEL_SPACE, pointBInClippingSpace, voxelOctree.mvpi);
+    vec3.sub(RAY_VECTOR, POINT_B_IN_MODEL_SPACE, POINT_A_IN_MODEL_SPACE);
+    const voxelMaterialAddress: number = voxelOctreeObjectRaytrace(voxelOctree.voxelOctree, POINT_A_IN_MODEL_SPACE, RAY_VECTOR, hitPosition);
+    // return voxelMaterialAddress;
+  }
 
-clipping volume (NDC): http://learnwebgl.brown37.net/08_projections/projections_introduction.html
-best tutorial: http://learnwebgl.brown37.net/08_projections/projections_perspective.html#:~:text=Typical%20values%20for%20near%20and,A%20perspective%20projection%20demo.
-
-MVP=P∗V∗M
-
-
- */
-
-// http://learnwebgl.brown37.net/08_projections/projections_perspective.html#:~:text=Typical%20values%20for%20near%20and,A%20perspective%20projection%20demo.
-
-// https://learnopengl.com/Getting-started/Coordinate-Systems
-// https://www.3dgep.com/understanding-the-view-matrix/#:~:text=The%20view%20matrix%20on%20the,space%20in%20the%20vertex%20program.
-// MVP=P∗V∗M
-// v′=MVP∗v
-// mvp put us in the normal space [-1, 1]
-
-
-// export function raytrace(
-//   rayColor: vec4, // [r, g, b, a = 1 - energy] in [0, 1]
-//   x: number,
-//   y: number,
-//   voxelOctrees: readonly IVoxelOctreeForRayTrace[],
-//   lights: readonly ILightForRayTrace[],
-//   ambientLightColor: vec3,
-// ) {
-//   const origin: vec4 = [x, y, 0, 1];
-//   const vector: vec4 = [0, 0, -1, 0];
-//
-//   const voxel = voxelOctrees[0];
-//
-//   console.log(vec4.transformMat4(vec4.create(), origin, voxel.matrix));
-//
-//   /// TODO continue here
-// }
-//
-//
-
+  return null;
+}

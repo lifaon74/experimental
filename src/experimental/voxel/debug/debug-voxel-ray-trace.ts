@@ -12,7 +12,9 @@ import {
   sliceVoxelOctreeUsingRaytrace
 } from '../draw/draw';
 import { mat4, vec3, vec4 } from 'gl-matrix';
-import { IVoxelOctreeForRayTrace, voxelOctreeRaytrace } from '../raytrace/raytrace';
+import {
+  IObject3DVoxelOctree, IVoxelOctreeForRayTrace, voxelOctreeObjectRaytrace, voxelOctreeRaytrace, voxelOctreeRaytraceMany
+} from '../raytrace/raytrace';
 import { NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT } from '../material';
 import { mat4_display } from '../matrix-helpers';
 import { formatSize } from '../misc/format-size';
@@ -283,7 +285,7 @@ function debugCanvasCoordinates(
 
 async function debugVoxelRayTrace2() {
   // await debugMatrix();
-  const windowSize: number = 1024;
+  const windowSize: number = 128;
   const side: number = 8;
   const side2: number = side / 2;
 
@@ -355,8 +357,8 @@ async function debugVoxelRayTrace2() {
         console.log('rayPosition', pointAInModelSpace.join(', '));
         console.log('rayVector', rayVector.join(', '));
         debugger;
-        const materialId: number = voxelOctreeRaytrace(voxelOctree.memory, voxelOctree.address, voxelOctree.depth, pointAInModelSpace, rayVector, hitPosition);
-        console.log('materialId', materialId);
+        const voxelMaterialAddress: number = voxelOctreeObjectRaytrace(voxelOctree, pointAInModelSpace, rayVector, hitPosition);
+        console.log('voxelMaterialAddress', voxelMaterialAddress);
 
         const j = (x + y * width) * 4;
         imageData.data[j] = 0;
@@ -378,15 +380,15 @@ async function debugVoxelRayTrace2() {
           vec3.transformMat4(pointBInModelSpace, pointBInClippingSpace, mvpi);
           vec3.sub(rayVector, pointBInModelSpace, pointAInModelSpace);
 
-          const materialId: number = voxelOctreeRaytrace(voxelOctree.memory, voxelOctree.address, voxelOctree.depth, pointAInModelSpace, rayVector, hitPosition);
+          const voxelMaterialAddress: number = voxelOctreeRaytrace(voxelOctree.memory, voxelOctree.address, voxelOctree.depth, pointAInModelSpace, rayVector, hitPosition);
 
-          if (materialId === NO_MATERIAL) {
+          if (voxelMaterialAddress === NO_MATERIAL) {
             imageData.data[i + 3] = 0;
             i += 4;
           } else {
-            imageData.data[i++] = voxelOctree.memory[materialId];
-            imageData.data[i++] = voxelOctree.memory[materialId + 1];
-            imageData.data[i++] = voxelOctree.memory[materialId + 2];
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress];
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress + 1];
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress + 2];
             imageData.data[i++] = 255;
           }
 
@@ -428,10 +430,146 @@ async function debugVoxelRayTrace2() {
 }
 
 
+async function debugVoxelRayTrace3() {
+  const windowSize: number = 128;
+  const side: number = 8;
+  const side2: number = side / 2;
+
+  const projection = mat4.perspective(mat4.create(), Math.PI / 2, 1, 1, 2); // far is not important (now) for raytracing
+
+  const view = mat4.lookAt(mat4.create(), [0, 0, -side], [0, 0, 0], [0, 1, 0]); // camera is at [0, 0, -side], and look in direction [0, 0, 0] (up is Y axis)
+  const view_projection = mat4.mul(mat4.create(), projection, view);
+
+  // const model = mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]); // center the model
+  // const mvp = mat4.create();
+  // mat4.mul(mvp, mat4.mul(mvp, projection, view), model);
+  // const mvpi = mat4.invert(mat4.create(), mvp);
+
+  // mat4_display('projection', projection);
+  // mat4_display('view', view);
+  // mat4_display('model', model);
+  // mat4_display('mvp', mvp);
+  // mat4_display('mvpi', mvpi);
+
+  // const pointAInClippingSpace: vec3 = vec3.fromValues(0, 0, -1);
+  // const pointBInClippingSpace: vec3 = vec3.fromValues(0, 0, 1);
+  // const pointAInModelSpace: vec3 = vec3.transformMat4(vec3.create(), pointAInClippingSpace, mvpi);
+  // const pointBInModelSpace: vec3 = vec3.transformMat4(vec3.create(), pointBInClippingSpace, mvpi);
+  // console.log(pointAInModelSpace, pointBInModelSpace);
+
+
+  /*--*/
+
+  function draw() {
+    interface IObject3DVoxel {
+      voxelOctree: VoxelOctree;
+      modelMatrix: mat4;
+    }
+
+    const voxel1: IObject3DVoxel = {
+      voxelOctree: createRainbowSphereVoxelOctree(side),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]),
+    };
+
+    const voxel2: IObject3DVoxel = {
+      voxelOctree: createAxisVoxelOctree(side, side / 16),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]),
+    };
+
+    const voxels: IObject3DVoxel[] = [
+      voxel1,
+      voxel2,
+    ];
+
+    const _voxels: IObject3DVoxelOctree[] = voxels.map((voxel: IObject3DVoxel) => {
+      const mvp: mat4 = mat4.mul(mat4.create(), view_projection, voxel.modelMatrix);
+      const mvpi: mat4 =  mat4.invert(mat4.create(), mvp);
+      return {
+        voxelOctree: voxel.voxelOctree,
+        mvp,
+        mvpi,
+      }
+    });
+    // const mvp: mat4[] = voxels.map(voxel => mat4.mul(mat4.create(), view_projection, voxel.modelMatrix));
+    // const mvpi: mat4[] = mvp.map(mvp => mat4.invert(mat4.create(), mvp));
+
+    function render(imageData: ImageData): ImageData {
+      const pointAInClippingSpace: vec3 = vec3.fromValues(0, 0, -1);
+      const pointBInClippingSpace: vec3 = vec3.fromValues(0, 0, 1);
+      const pointAInModelSpace: vec3 = vec3.create();
+      const pointBInModelSpace: vec3 = vec3.create();
+      const rayVector: vec3 = vec3.create();
+      const hitPosition: vec3 = vec3.create();
+
+      const width: number = imageData.width;
+      const widthM1: number = width - 1;
+      const height: number = imageData.height;
+      const heightM1: number = height - 1;
+
+      let i = 0;
+      for (let y = 0; y < height; y++) {
+        pointAInClippingSpace[1] = pointBInClippingSpace[1] = -(((2 * y) - heightM1) / height); // negate because y axis of Image data is opposite of viewport
+        // pointAInClippingSpace[1] = pointBInClippingSpace[1] = (((2 * y) - heightM1) / heightM1); // naive
+
+        for (let x = 0; x < width; x++) {
+          pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / width;
+          // pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / widthM1; // naive
+
+          const voxelMaterialAddress: number = voxelOctreeRaytraceMany(_voxels, pointAInModelSpace, pointBInClippingSpace, hitPosition);
+
+          if (voxelMaterialAddress === NO_MATERIAL) {
+            imageData.data[i + 3] = 0;
+            i += 4;
+          } else {
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress];
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress + 1];
+            imageData.data[i++] = voxelOctree.memory[voxelMaterialAddress + 2];
+            imageData.data[i++] = 255;
+          }
+
+        }
+      }
+
+      // drawDebug(39, 30);
+
+      return imageData;
+    }
+
+    console.time('raycast');
+    drawImageData(render(new ImageData(windowSize, windowSize)));
+    console.timeEnd('raycast');
+    debugCanvasCoordinates(windowSize / 512);
+
+
+    /*----*/
+
+    // const imageData = new ImageData(windowSize, windowSize);
+    // const ctx: CanvasRenderingContext2D = createCanvasContext(imageData.width, imageData.height);
+    //
+    // const refresh = startCameraControl();
+    // const loop = () => {
+    //   requestAnimationFrame(() => {
+    //     refresh(view, view);
+    //     mat4.mul(mvp, mat4.mul(mvp, projection, view), model);
+    //     // mat4_display('mvp', mvp);
+    //     mat4.invert(mvpi, mvp);
+    //     ctx.putImageData(render(imageData), 0, 0);
+    //     loop();
+    //   });
+    // };
+    // loop();
+
+  }
+
+  draw();
+}
+
+
 /*------------------*/
 
 export async function debugVoxelRayTrace() {
   // await debugVoxelRayTrace1();
-  await debugVoxelRayTrace2();
+  // await debugVoxelRayTrace2();
+  await debugVoxelRayTrace3();
 
 }
