@@ -10,24 +10,12 @@ import {
   writeNewVoxelOctreeInMemory, writeVoxelOctreeMaterialAddress,
 } from '../octree';
 import {
-  displayVoxelOctreeSlice, drawEmptyCubeForOctree, drawRainbowCubeForOctree, drawRainbowSphereForOctree,
-  drawUniformRedCubeForOctree,
-  drawUniformRedSphereForOctree,
-  drawVoxelsToDebugUnreachableVoxels, sliceOctreeUsingReadVoxel, sliceVoxelOctreeUsingRaytrace,
+  displayVoxelOctreeSlice, drawEmptyCubeForOctree, drawRainbowCubeForOctree, drawUniformRedCubeForOctree,
+  drawVoxelsToDebugUnreachableVoxels, sliceOctreeUsingReadVoxel,
 } from '../draw/draw';
 import { CompactVoxelOctreesOnNewMemory, RemoveUnreachableVoxelsOfVoxelOctree } from '../compact';
-import { IVoxelOctreeForRayTrace, voxelOctreeRaytrace, } from '../raytrace/raytrace';
-import { assert } from '../../assert/assert';
-import { mat4, vec2, vec3 } from 'gl-matrix';
-import { mat4_display } from '../matrix-helpers';
-import { hitCubeIn } from '../raytrace/collide/hit-cube-in';
-import { isValidHitPoint } from '../raytrace/collide/is-valid-hit-point';
-import { isNextPointInCube } from '../raytrace/collide/is-next-point-in-cube';
-import { arrayEquals } from '../../assert/array-equals';
-import { hitCubeOut } from '../raytrace/collide/hit-cube-out';
 import { debugVoxelRayTrace } from './debug-voxel-ray-trace';
 import { formatSize } from '../misc/format-size';
-import { debugVoxelCollide } from './debug-voxel-collide';
 
 
 function speedTest(): void {
@@ -71,7 +59,6 @@ function debugVoxel1() {
 
   console.log(MEMORY_VIEW);
 }
-
 
 
 // 32 -> 318313 ≃ 318K
@@ -230,9 +217,6 @@ function debugVoxelCompactMaterials() {
   // debugOctreeCompact();
   debugOctreeRemoveUnreachable();
 }
-
-
-
 
 
 /*--------------------------*/

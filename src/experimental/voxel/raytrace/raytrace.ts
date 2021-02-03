@@ -125,8 +125,8 @@ export interface IObject3DVoxelOctree {
   mvpi: mat4;
 }
 
-export interface IVoxelOctreeRaytraceManyReturn {
-  voxelOctree: VoxelOctree;
+export interface IVoxelOctreeRaytraceManyResult {
+  index: number;
   voxelMaterialAddress: number;
   hitPosition: vec3;
 }
@@ -136,22 +136,43 @@ export interface IVoxelOctreeRaytraceManyReturn {
 const POINT_A_IN_MODEL_SPACE: vec3 = vec3.create();
 const POINT_B_IN_MODEL_SPACE: vec3 = vec3.create();
 const RAY_VECTOR: vec3 = vec3.create();
+const HIT_POSITION: vec3 = vec3.create();
+
+function vec3TransformMat4Z(a: vec3, m: mat4): number {
+  // vec3.transformMat4(vec3.create(), a, m)[2];
+  let x = a[0], y = a[1], z = a[2];
+  let w = m[3] * x + m[7] * y + m[11] * z + m[15];
+  w = w || 1.0;
+  return (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
+}
 
 // TODO continue here
 export function voxelOctreeRaytraceMany(
   voxelOctrees: IObject3DVoxelOctree[],
   pointAInClippingSpace: vec3,
   pointBInClippingSpace: vec3,
-  hitPosition: vec3,
-): IVoxelOctreeRaytraceManyReturn | null {
+  result: IVoxelOctreeRaytraceManyResult,
+): void {
+  result.index = -1;
+  result.voxelMaterialAddress = NO_MATERIAL;
+  let hitPositionZInClippingSpace: number = Number.POSITIVE_INFINITY;
+
   for (let i = 0, l = voxelOctrees.length; i < l; i++) {
-    const voxelOctree: IObject3DVoxelOctree = voxelOctrees[i];
-    vec3.transformMat4(POINT_A_IN_MODEL_SPACE, pointAInClippingSpace, voxelOctree.mvpi);
-    vec3.transformMat4(POINT_B_IN_MODEL_SPACE, pointBInClippingSpace, voxelOctree.mvpi);
+    const object3DVoxelOctree: IObject3DVoxelOctree = voxelOctrees[i];
+    vec3.transformMat4(POINT_A_IN_MODEL_SPACE, pointAInClippingSpace, object3DVoxelOctree.mvpi);
+    vec3.transformMat4(POINT_B_IN_MODEL_SPACE, pointBInClippingSpace, object3DVoxelOctree.mvpi);
     vec3.sub(RAY_VECTOR, POINT_B_IN_MODEL_SPACE, POINT_A_IN_MODEL_SPACE);
-    const voxelMaterialAddress: number = voxelOctreeObjectRaytrace(voxelOctree.voxelOctree, POINT_A_IN_MODEL_SPACE, RAY_VECTOR, hitPosition);
-    // return voxelMaterialAddress;
+    const localVoxelMaterialAddress: number = voxelOctreeObjectRaytrace(object3DVoxelOctree.voxelOctree, POINT_A_IN_MODEL_SPACE, RAY_VECTOR, HIT_POSITION);
+    if (localVoxelMaterialAddress !== NO_MATERIAL) {
+      const z: number = vec3TransformMat4Z(HIT_POSITION, object3DVoxelOctree.mvp);
+
+      if (z < hitPositionZInClippingSpace) {
+        result.index = i;
+        result.voxelMaterialAddress = localVoxelMaterialAddress;
+        vec3.copy(result.hitPosition, HIT_POSITION);
+        hitPositionZInClippingSpace = z;
+      }
+    }
   }
 
-  return null;
 }
