@@ -13,7 +13,10 @@ import {
 } from '../draw/draw';
 import { mat4, vec3, vec4 } from 'gl-matrix';
 import {
+  ILightSpectrum,
+  IObject3DLight,
   IObject3DVoxelOctree, IVoxelOctreeRaytraceManyResult, voxelOctreeObjectRaytrace, voxelOctreeRaytrace,
+  voxelOctreeRaytraceWithLights,
   voxelOctreeRaytraceMany
 } from '../raytrace/raytrace';
 import { NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT } from '../material';
@@ -580,12 +583,199 @@ async function debugVoxelRayTrace3() {
   draw();
 }
 
+async function debugVoxelRayTrace4() {
+  const windowSize: number = 128;
+  const side: number = 64;
+  const side2: number = side / 2;
+
+  const projection = mat4.perspective(mat4.create(), Math.PI / 2, 1, 1, 2); // far is not important (now) for raytracing
+  // const projection = mat4.ortho(mat4.create(), -side2, side2, -side2, side2, -side2, side2);
+
+  const view = mat4.lookAt(mat4.create(), [0, 0, -side], [0, 0, 0], [0, 1, 0]); // camera is at [0, 0, -side], and look in direction [0, 0, 0] (up is Y axis)
+  const view_projection = mat4.mul(mat4.create(), projection, view);
+
+  /*--*/
+
+  function draw() {
+    interface IWorldObject3DVoxel {
+      voxelOctree: VoxelOctree;
+      modelMatrix: mat4;
+    }
+
+    const voxel1: IWorldObject3DVoxel = {
+      voxelOctree: createRainbowSphereVoxelOctree(side),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]),
+      // modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side, 0]),
+    };
+
+    const voxel2: IWorldObject3DVoxel = {
+      voxelOctree: createAxisVoxelOctree(side),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]),
+    };
+
+    const voxels: IWorldObject3DVoxel[] = [
+      voxel1,
+      voxel2,
+    ];
+
+    const _voxels: IObject3DVoxelOctree[] = voxels.map((voxel: IWorldObject3DVoxel) => {
+      const mvp: mat4 = mat4.mul(mat4.create(), view_projection, voxel.modelMatrix);
+      const mvpi: mat4 =  mat4.invert(mat4.create(), mvp);
+      return {
+        voxelOctree: voxel.voxelOctree,
+        mvp,
+        mvpi,
+      }
+    });
+
+
+    /*--*/
+
+    // const ambient: number = 0;
+    const ambient: number = 0.2;
+    // const ambient: number = 0.5;
+    const ambientLightSpectrum: vec3 = vec3.fromValues(ambient, ambient, ambient,);
+
+    interface IWorldObject3DLight {
+      spectrum: ILightSpectrum;
+      modelMatrix: mat4;
+    }
+
+    const cameraLight: IWorldObject3DLight = {
+      spectrum: vec3.fromValues(1, 1, 1),
+      modelMatrix: mat4.clone(view),
+    };
+
+    const light1: IWorldObject3DLight = {
+      spectrum: vec3.fromValues(1, 1, 1),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [0, 0, -side]),
+    };
+
+    const light2: IWorldObject3DLight = {
+      spectrum: vec3.fromValues(1, 1, 1),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [0, 0, -2000]),
+    };
+
+    const light3: IWorldObject3DLight = {
+      spectrum: vec3.fromValues(1, 1, 1),
+      modelMatrix: mat4.fromTranslation(mat4.create(), [-2000, -2000, -2000]),
+    };
+
+    vec3.scale(cameraLight.spectrum, cameraLight.spectrum, 16);
+    vec3.scale(light1.spectrum, light1.spectrum, 16);
+    vec3.scale(light2.spectrum, light2.spectrum, 3200000);
+    vec3.scale(light3.spectrum, light3.spectrum, 6400000);
+
+    const lights: IWorldObject3DLight[] = [
+      // cameraLight,
+      // light1,
+      // light2,
+      light3,
+    ];
+
+    const _lights: IObject3DLight[] = lights.map((light: IWorldObject3DLight) => {
+      const mvp: mat4 = mat4.mul(mat4.create(), view_projection, light.modelMatrix);
+      const mvpi: mat4 =  mat4.invert(mat4.create(), mvp);
+      return {
+        spectrum: light.spectrum,
+        mvp,
+        mvpi,
+      }
+    });
+
+    /*--*/
+
+
+
+    const color: vec4 = vec4.create();
+
+    function render(imageData: ImageData): ImageData {
+      const pointAInClippingSpace: vec3 = vec3.fromValues(0, 0, -1);
+      const pointBInClippingSpace: vec3 = vec3.fromValues(0, 0, 1);
+
+      const width: number = imageData.width;
+      const widthM1: number = width - 1;
+      const height: number = imageData.height;
+      const heightM1: number = height - 1;
+
+      let i = 0;
+      for (let y = 0; y < height; y++) {
+        pointAInClippingSpace[1] = pointBInClippingSpace[1] = -(((2 * y) - heightM1) / height); // negate because y axis of Image data is opposite of viewport
+
+        for (let x = 0; x < width; x++) {
+          pointAInClippingSpace[0] = pointBInClippingSpace[0] = ((2 * x) - widthM1) / width;
+
+          // pointAInClippingSpace[0] = pointBInClippingSpace[0] = 0;
+          // pointAInClippingSpace[1] = pointBInClippingSpace[1] = 0;
+          voxelOctreeRaytraceWithLights(
+            _voxels,
+            _lights,
+            ambientLightSpectrum,
+            pointAInClippingSpace,
+            pointBInClippingSpace,
+            color,
+          );
+
+          imageData.data[i++] = color[0] * 255;
+          imageData.data[i++] = color[1] * 255;
+          imageData.data[i++] = color[2] * 255;
+          imageData.data[i++] = color[3] * 255;
+
+          // return imageData;
+        }
+      }
+
+      return imageData;
+    }
+
+    console.time('raycast');
+    drawImageData(render(new ImageData(windowSize, windowSize)));
+    console.timeEnd('raycast');
+    debugCanvasCoordinates(windowSize / 512);
+
+
+    /*----*/
+
+    const imageData = new ImageData(windowSize, windowSize);
+    const ctx: CanvasRenderingContext2D = createCanvasContext(imageData.width, imageData.height);
+
+    const refresh = startCameraControl();
+
+    const loop = () => {
+      requestAnimationFrame(() => {
+        refresh(view, view);
+        mat4.mul(view_projection, projection, view);
+        mat4.invert(cameraLight.modelMatrix, view);
+        for (let i = 0, l = voxels.length; i < l; i++) {
+          const voxel: IWorldObject3DVoxel = voxels[i];
+          const _voxel: IObject3DVoxelOctree = _voxels[i];
+          mat4.mul(_voxel.mvp, view_projection, voxel.modelMatrix);
+          mat4.invert(_voxel.mvpi, _voxel.mvp);
+        }
+        for (let i = 0, l = lights.length; i < l; i++) {
+          const light: IWorldObject3DLight = lights[i];
+          const _light: IObject3DLight = _lights[i];
+          mat4.mul(_light.mvp, view_projection, light.modelMatrix);
+          mat4.invert(_light.mvpi, _light.mvp);
+        }
+        ctx.putImageData(render(imageData), 0, 0);
+        loop();
+      });
+    };
+    loop();
+
+  }
+
+  draw();
+}
+
 
 /*------------------*/
 
 export async function debugVoxelRayTrace() {
   // await debugVoxelRayTrace1();
   // await debugVoxelRayTrace2();
-  await debugVoxelRayTrace3();
+  // await debugVoxelRayTrace3();
+  await debugVoxelRayTrace4();
 
 }

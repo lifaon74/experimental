@@ -650,6 +650,9 @@ export function createCanvasContext(width: number, height: number): CanvasRender
   ctx.canvas.style.height = '512px';
   ctx.canvas.style.imageRendering = 'pixelated';
   ctx.canvas.style.border = '2px solid black';
+  // ctx.canvas.style.backgroundImage = `url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAABlBMVEX////MzMw46qqDAAAAEElEQVQImWNg+M+AFeEQBgB+vw/xfUUZkgAAAABJRU5ErkJggg==')`;
+  ctx.canvas.style.backgroundColor = `black`;
+
   return ctx;
 }
 
