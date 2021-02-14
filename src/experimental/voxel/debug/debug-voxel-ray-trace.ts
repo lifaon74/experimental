@@ -5,10 +5,10 @@ import { AbstractMemory } from '../abstract-memory';
 import {
   createCanvasContext,
   displayVoxelOctreeSlice, drawAxisForOctree, drawImageData, drawRainbowCubeForOctree, drawRainbowInnerCubeForOctree,
-  drawRainbowSphereForOctree,
+  drawRainbowSphereForOctree, drawTexture3DDataForVoxelOctree,
   drawUniformInnerRedCubeForOctree,
   drawUniformRedSphereForOctree,
-  ISliceVoxelOctreeCallback, sliceOctreeUsingReadVoxel,
+  ISliceVoxelOctreeCallback, ITexture3DData, sliceOctreeUsingReadVoxel,
   sliceVoxelOctreeUsingRaytrace
 } from '../draw/draw';
 import { mat4, vec3, vec4 } from 'gl-matrix';
@@ -23,6 +23,9 @@ import { NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT } from '../material';
 import { mat4_display } from '../matrix-helpers';
 import { formatSize } from '../misc/format-size';
 import { IAllocFunction } from '../memory-address';
+import { texture as chr_knight_texture } from '../assets/voxels/chr_knight';
+import { texture as castle_texture } from '../assets/voxels/castle';
+
 
 const createEmptyVoxelOctree = (side: number) => {
   const voxelDepth: number = convertVoxelOctreeSideToDepth(side);
@@ -84,6 +87,17 @@ const createAxisVoxelOctree = (side: number, lineWidth: number = Math.max(1, sid
   return voxel;
 };
 
+const importTexture3DDataVoxelOctree = (texture: ITexture3DData) => {
+  const side = 1 << Math.ceil(Math.log2(Math.max(
+    texture[0].x,
+    texture[0].y,
+    texture[0].z,
+  )));
+  const { voxel, alloc } = createEmptyVoxelOctree(side);
+  drawTexture3DDataForVoxelOctree(voxel.memory, voxel.address, voxel.depth, alloc, texture);
+  logSize(alloc);
+  return voxel;
+};
 
 
 /*-----------------------*/
@@ -596,7 +610,7 @@ async function debugVoxelRayTrace4() {
 
   /*--*/
 
-  function draw() {
+  async function draw() {
     interface IWorldObject3DVoxel {
       voxelOctree: VoxelOctree;
       modelMatrix: mat4;
@@ -613,10 +627,22 @@ async function debugVoxelRayTrace4() {
       modelMatrix: mat4.fromTranslation(mat4.create(), [-side2, -side2, -side2]),
     };
 
+    const voxel3: IWorldObject3DVoxel = {
+      voxelOctree: importTexture3DDataVoxelOctree(chr_knight_texture),
+      // voxelOctree: importTexture3DDataVoxelOctree(castle_texture),
+      modelMatrix: mat4.create(),
+    };
+
     const voxels: IWorldObject3DVoxel[] = [
       voxel1,
       voxel2,
+      // voxel3,
     ];
+
+    const modelScale = 1;
+    mat4.rotateX(voxel3.modelMatrix, voxel3.modelMatrix, Math.PI / 2);
+    mat4.rotateY(voxel3.modelMatrix, voxel3.modelMatrix, Math.PI);
+    mat4.scale(voxel3.modelMatrix, voxel3.modelMatrix, vec3.fromValues(modelScale, modelScale, modelScale));
 
     const _voxels: IObject3DVoxelOctree[] = voxels.map((voxel: IWorldObject3DVoxel) => {
       const mvp: mat4 = mat4.mul(mat4.create(), view_projection, voxel.modelMatrix);
@@ -632,7 +658,7 @@ async function debugVoxelRayTrace4() {
     /*--*/
 
     // const ambient: number = 0;
-    const ambient: number = 0.2;
+    const ambient: number = 0.1;
     // const ambient: number = 0.5;
     const ambientLightSpectrum: vec3 = vec3.fromValues(ambient, ambient, ambient,);
 
@@ -662,7 +688,7 @@ async function debugVoxelRayTrace4() {
     };
 
     vec3.scale(cameraLight.spectrum, cameraLight.spectrum, 16);
-    vec3.scale(light1.spectrum, light1.spectrum, 16);
+    vec3.scale(light1.spectrum, light1.spectrum, 32);
     vec3.scale(light2.spectrum, light2.spectrum, 3200000);
     vec3.scale(light3.spectrum, light3.spectrum, 6400000);
 
@@ -766,7 +792,7 @@ async function debugVoxelRayTrace4() {
 
   }
 
-  draw();
+  await draw();
 }
 
 

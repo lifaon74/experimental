@@ -2,10 +2,12 @@ import {
   convertVoxelOctreeDepthToSide, readVoxelMaterialAddressOfVoxelOctreeAtPosition, VoxelOctree,
   writeVoxelOctreeMaterialAddress
 } from '../octree';
-import { NO_MATERIAL, VoxelMaterial } from '../material';
+import { NO_MATERIAL, VOXEL_MATERIAL_BYTES_PER_ELEMENT, VoxelMaterial, writeNewVoxelMaterial } from '../material';
 import { IAllocFunction } from '../memory-address';
 import { vec3 } from 'gl-matrix';
 import { voxelOctreeRaytrace } from '../raytrace/raytrace';
+import { AbstractMemory } from '../abstract-memory';
+import { CompactVoxelOctreesOnNewMemory } from '../compact';
 
 export interface IDrawFunction {
   (
@@ -135,6 +137,50 @@ export function cubeDraw(
   return boxDraw(side, side, side);
 }
 
+
+/*-------------- FOR DEBUG -------------*/
+
+export type ITexture3DData = [{ x: number; y: number; z: number }, Uint8Array];
+
+export function drawTexture3DDataForVoxelOctree(
+  memory: Uint8Array,
+  voxelOctreeAddress: number,
+  voxelOctreeDepth: number,
+  alloc: IAllocFunction,
+  texture: ITexture3DData,
+) {
+  const x_size: number = texture[0].x;
+  const y_size: number = texture[0].y;
+  const z_size: number = texture[0].z;
+  const data: Uint8Array = texture[1];
+  let materialAddress: number;
+
+  for (let x = 0; x < x_size; x++) {
+    for (let y = 0; y < y_size; y++) {
+      for (let z = 0; z < z_size; z++) {
+        const i: number = (x + (y * x_size) + (z * x_size * y_size)) * 4;
+
+        if (data[i + 3] === 0) {
+          materialAddress = NO_MATERIAL;
+        } else {
+          materialAddress = alloc(VOXEL_MATERIAL_BYTES_PER_ELEMENT);
+          writeNewVoxelMaterial(memory, materialAddress, data[i], data[i + 1], data[i + 2]);
+        }
+
+        writeVoxelOctreeMaterialAddress(
+          memory,
+          voxelOctreeAddress,
+          alloc,
+          voxelOctreeDepth,
+          x,
+          y,
+          z,
+          materialAddress,
+        );
+      }
+    }
+  }
+}
 
 /*-------------- FOR DEBUG -------------*/
 
