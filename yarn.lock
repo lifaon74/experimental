@@ -52,6 +52,11 @@
   resolved "https://registry.yarnpkg.com/@lifaon/path/-/path-1.1.2.tgz#abf953566066d9d8b4d4ba5e847408211f2b200e"
   integrity sha512-uFECM33D3yExTzgesfNhJcgQODEkrKvhqE8uKYY/jizeN1gRNSDQwPQnY2avysE2IacpYe39mA1/Hr5aEergww==
 
+"@lifaon/rx-js-light@1.0.0-beta.2":
+  version "1.0.0-beta.2"
+  resolved "https://registry.yarnpkg.com/@lifaon/rx-js-light/-/rx-js-light-1.0.0-beta.2.tgz#9955925342178125998382c48a8e300332f5bcc2"
+  integrity sha512-Pn0X9hGJLsaaCW5zIjN+CTW0QmCfPNxQ7iKl5MgVXt7V25+56LCYgxvaUDssSo48kGEG4w/iOflRNxjdd7kWBw==
+
 "@types/css-tree@^1.0.4":
   version "1.0.4"
   resolved "https://registry.yarnpkg.com/@types/css-tree/-/css-tree-1.0.4.tgz#bc9a31202dbff2ddaab6b6f8e4040581937f2928"

@@ -1,0 +1,147 @@
+import { mat4, vec3 } from 'gl-matrix';
+import { ILightSpectrum } from '../../raytrace/raytrace';
+import {
+  createMulticastReplayLastSource, IEmitFunction, IMulticastReplayLastSource, ISubscribeFunction, IUnsubscribeFunction
+} from '@lifaon/rx-js-light';
+
+interface IConstructor<GInstance = any, GArguments extends any[] = any[]> {
+  new(...args: GArguments): GInstance;
+}
+
+
+/*----------*/
+
+// export interface IObject3D {
+//   readonly modelMatrix: mat4;
+// }
+//
+//
+// export function Object3DFactory<GBase extends IConstructor>(base: GBase) {
+//   return class extends base implements IObject3D {
+//     readonly modelMatrix: mat4;
+//
+//     constructor(...args: any[]) {
+//       super(...args);
+//       this.modelMatrix = mat4.create();
+//     }
+//   };
+// }
+
+export interface IObject3D {
+  getModelMatrix(): mat4;
+  setModelMatrix(modelMatrix: mat4): void;
+  subscribeModelMatrix(emit: IEmitFunction<mat4>): IUnsubscribeFunction;
+}
+
+
+export function Object3DFactory<GBase extends IConstructor>(base: GBase) {
+  return class extends base implements IObject3D {
+    protected modelMatrix: IMulticastReplayLastSource<mat4>;
+
+    constructor(...args: any[]) {
+      super(...args);
+      this.modelMatrix = createMulticastReplayLastSource<mat4>({ initialValue: mat4.create() });
+    }
+
+    getModelMatrix(): mat4 {
+      return this.modelMatrix.getValue();
+    }
+
+    setModelMatrix(modelMatrix: mat4): void {
+      this.modelMatrix.emit(modelMatrix);
+    }
+
+    subscribeModelMatrix(emit: IEmitFunction<mat4>): IUnsubscribeFunction {
+      return this.modelMatrix.subscribe(emit);
+    }
+  };
+}
+
+/*----------*/
+
+export interface IObject3DChild {
+  readonly parent: IObject3DParent | null;
+
+  detach(): void;
+}
+
+
+export function Object3DChildFactory<GBase extends IConstructor>(base: GBase) {
+  return class extends base implements IObject3DChild {
+    readonly parent: IObject3DParent | null;
+
+    constructor(...args: any[]) {
+      super(...args);
+      this.parent = null;
+    }
+
+    detach(): void {
+      if (this.parent !== null) {
+        (this as any).parent.children.delete(this);
+        (this as any).parent = null;
+      }
+    }
+  };
+}
+
+
+/*----------*/
+
+export interface IObject3DParent {
+  readonly children: ReadonlySet<IObject3DChild>;
+
+  // readonly onAttach: ISubscribeFunction<IObject3DChild>;
+  // readonly onDetach: ISubscribeFunction<IObject3DChild>;
+
+  attach<GChild extends IObject3DChild>(
+    child: GChild,
+  ): GChild;
+}
+
+export function Object3DParentFactory<GBase extends IConstructor>(base: GBase) {
+  return class extends base implements IObject3DParent {
+    readonly children: ReadonlySet<IObject3DChild>;
+
+    constructor(...args: any[]) {
+      super(...args);
+      this.children = new Set<IObject3DChild>();
+    }
+
+    attach<GChild extends IObject3DChild>(
+      child: GChild,
+    ): GChild {
+      if (child.parent !== this) {
+        child.detach();
+        (this.children as Set<IObject3DChild>).add(child);
+        (child as any).parent = this;
+      }
+      return child;
+    }
+  };
+}
+
+/*----------*/
+
+export interface IObject3DLight {
+  readonly spectrum: ILightSpectrum;
+}
+
+
+export function Object3DLightFactory<GBase extends IConstructor>(base: GBase) {
+  return class extends base implements IObject3DLight {
+    readonly spectrum: ILightSpectrum;
+
+    constructor(...args: any[]) {
+      super(...args);
+      this.spectrum = vec3.create();
+    }
+  };
+}
+
+
+/*---------------------*/
+
+
+export async function debugObject3d() {
+
+}

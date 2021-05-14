@@ -16,6 +16,7 @@ import {
 import { CompactVoxelOctreesOnNewMemory, RemoveUnreachableVoxelsOfVoxelOctree } from '../compact';
 import { debugVoxelRayTrace } from './debug-voxel-ray-trace';
 import { formatSize } from '../misc/format-size';
+import { debugObject3d } from './object-3d/debug-object-3d';
 
 
 function speedTest(): void {
@@ -225,5 +226,6 @@ export async function debugVoxel() {
   // displayVoxelMaxMemorySize();
   // debugVoxelCompactMaterials();
   // await debugVoxelCollide();
-  await debugVoxelRayTrace();
+  // await debugVoxelRayTrace();
+  await debugObject3d();
 }
